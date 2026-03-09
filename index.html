@@ -1,0 +1,6940 @@
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Stock Viewer</title>
+
+<!-- ================= UI STYLE ================= -->
+<style>
+  :root {
+  /* ================= PHASE 3: TYPOGRAPHY / HIERARCHY ================= */
+  --text-primary:   rgba(17,17,17,.92);
+  --text-secondary: rgba(60,60,67,.82); /* 🔴 เพิ่มความคมชัด */
+  --title-size:     22px;
+  --subtitle-size:  12.5px;
+  --title-weight:   700;
+  --subtitle-weight:500;
+    
+  /* ================= STEP 2: SHADOW/DEPTH TOKENS (UNIFIED) ================= */
+  --shadow-card:            0 10px 30px rgba(0,0,0,.08);
+  --shadow-control:         0 6px 16px rgba(0,0,0,.08);
+  --shadow-image:           0 4px 12px rgba(0,0,0,.12);  
+  --shadow-header:          0 8px 28px rgba(0,0,0,.06);
+  --shadow-header-scrolled: 0 12px 36px rgba(0,0,0,.12);
+  /* card pressed should be card semantics (not control) */
+  --shadow-card-pressed:    0 6px 18px rgba(0,0,0,.06);
+  /* canvas export card shadow should follow tokens */
+  --shadow-canvas-card:     var(--shadow-card);
+  --shadow-side:            -6px 0 20px rgba(0,0,0,.12);
+  --shadow-floating:        0 12px 36px rgba(0,0,0,.12);
+  --shadow-fab:             0 10px 28px rgba(0,0,0,.14); 
+  
+  /* legacy alias (keep old refs working + follow unified override) */
+  --shadow-float:           var(--shadow-floating);  
+   
+   /* ================= STEP 1: INTERACTION TOKENS ================= */
+   /* Tap scale */
+   --tap-scale-primary: .97;   /* primary / confirm */
+   --tap-scale-icon:    .95;   /* icon circle buttons */
+   --tap-scale-card:    .98;   /* cards should feel heavier */
+
+   /* Durations */
+   --dur-tap:   140ms;
+   --dur-sheet: 300ms;
+   --dur-chrome:360ms;
+
+   /* Easings (keep minimal, iOS-like) */
+   --ease-tap:   cubic-bezier(.2,.8,.2,1);
+   --ease-out:   cubic-bezier(.22,.61,.36,1);
+   --ease-chrome:cubic-bezier(.22,.61,.36,1); 
+ }
+  
+  html, body {
+  margin: 0;
+  padding: 0;
+
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;   /* 🔴 ตัวนี้คือหัวใจ */
+
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #f2f2f7;
+  height: 100%;  
+  min-height: 100%;
+}
+
+  body{
+   min-height: 100dvh;
+  }
+  
+  header{
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 20px)
+    calc(env(safe-area-inset-right, 0px) + 16px)
+    18px
+    calc(env(safe-area-inset-left, 0px) + 16px);
+  font-size: inherit;
+  font-weight: inherit;
+
+  /* 🔹 Visual */
+  background:rgba(255,255,255,.65);
+  backdrop-filter:blur(30px) saturate(180%);
+  -webkit-backdrop-filter:blur(30px) saturate(180%);
+  border-bottom: 1px solid rgba(255,255,255,.4);
+
+  box-shadow:
+    var(--shadow-header),
+    inset 0 -1px 0 rgba(255,255,255,.35);
+
+  /* 🔹 Position */
+  position:sticky;
+  top:0;
+  z-index:50;
+
+  /* 🔹 Layout (สำคัญ) */
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+
+  /* 🔴 FIX สำคัญ */
+  min-height:110px;     /* รองรับ Search + Filter (STEP 5.2) */  
+  box-sizing:border-box;
+
+  transition:
+    padding var(--dur-chrome) var(--ease-chrome),
+    min-height var(--dur-chrome) var(--ease-chrome),
+    background var(--dur-chrome) ease,
+    box-shadow var(--dur-chrome) ease;
+  }
+
+  header.scrolled{
+   padding:
+    calc(env(safe-area-inset-top, 0px) + 12px)
+    calc(env(safe-area-inset-right, 0px) + 16px)
+    10px
+    calc(env(safe-area-inset-left, 0px) + 16px);
+   min-height: 72px;
+   background: rgba(255,255,255,.85);
+   box-shadow:
+    var(--shadow-header-scrolled),
+    inset 0 -1px 0 rgba(255,255,255,.5);
+ } 
+
+/* ================= SHOP TITLE GLOW ================= */
+ .shop-title,
+ .admin-title{
+   font-weight: var(--title-weight);
+  font-size: var(--title-size);
+  letter-spacing: .15px;
+  color: var(--text-primary);
+
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+
+  /* ✅ Match filter/menu/search: Apple-nimble glass */
+  background: rgba(255,255,255,.55);
+  border: 1px solid rgba(255,255,255,.45);
+  backdrop-filter: blur(16px) saturate(170%);
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+  /* ✅ add inner rim + same depth language as buttons */
+  box-shadow:
+    var(--shadow-control),
+    inset 0 1px 0 rgba(255,255,255,.70),
+    inset 0 -1px 0 rgba(255,255,255,.28);
+
+  /* Apple-nimble: เงาเบามาก ไม่ glow */
+  text-shadow: 0 1px 0 rgba(255,255,255,.35);
+ }
+
+/* ✅ Glass highlight (top-left glare) */
+  .shop-title::before,
+  .admin-title::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  z-index:0;
+  background:
+    radial-gradient(70% 55% at 28% 22%,
+      rgba(255,255,255,.95) 0%,
+      rgba(255,255,255,.55) 26%,
+      rgba(255,255,255,0) 60%);
+  opacity:.45;
+  pointer-events:none;
+  mix-blend-mode: screen;
+}
+/* ✅ ensure text always above highlight (even when no child elements) */
+.shop-title,
+.admin-title{ z-index: 0; }
+  
+/* PHASE 3: Supporting line under title */
+.shop-subtitle{
+  margin-top: 6px;
+  font-size: var(--subtitle-size);
+  font-weight: var(--subtitle-weight);
+  color: var(--text-secondary);
+  letter-spacing: .2px;
+}
+
+/* ================= PHASE 3: HEADER HIERARCHY LAYOUT ================= */
+.header-left{
+  flex: 1;
+  min-width: 0;
+}
+.header-stack{
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.header-actions{
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 12px;
+}  
+  
+/* ================= ADMIN TITLE (only delta) ================= */
+ .admin-title{
+   /* 🔴 CHANGED: ให้เหมือน shop-title 100% → ไม่ดันซ้ายด้วย margin */
+   margin-left: 0;
+ }
+  
+@media (prefers-color-scheme: dark){
+  .admin-title{
+    /* 🔴 CHANGED: ทำให้ rgba ถูกต้องตามมาตรฐาน (กัน rule หลุดในบาง browser) */
+    color: rgba(255,255,255,.92);
+    text-shadow:
+      0 0 10px rgba(0,0,0,.70),
+      0 0 22px rgba(0,0,0,.45);
+  }
+}
+  
+  .badge{
+    color:#fff;
+  border-radius:999px;
+  padding:3px 10px;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.2px;
+  background: rgba(255,59,48,.88);
+  border: 1px solid rgba(255,255,255,.28);
+  box-shadow:
+    0 10px 24px rgba(0,0,0,.14),
+    inset 0 1px 0 rgba(255,255,255,.35);
+  }
+  .container{padding:16px;display:grid;gap:16px;}
+  
+  .card{
+    background: rgba(255,255,255,.72);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-radius:18px;
+  padding:14px;
+  cursor:pointer;
+  box-shadow: var(--shadow-card);
+  }
+  .name{
+  font-weight:600;
+  line-height:1.35;
+
+  display:-webkit-box;
+  -webkit-line-clamp:2;      /* จำกัด 2 บรรทัด */
+  -webkit-box-orient:vertical;
+
+  overflow:hidden;
+  word-break:break-word;
+}
+  .price{color:#007aff;margin-top:4px;}
+  .stock{font-size:14px;color:#666;}
+
+  .backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.25);
+  backdrop-filter: blur(2px);
+  display: none;
+  z-index: 100;
+}
+
+.sheet{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  background: rgba(255,255,255,.85);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-radius: 22px 22px 0 0;
+  box-shadow: var(--shadow-float);
+
+  padding: 20px 20px 24px; /* เว้นล่างให้หายอึดอัด */
+
+  /* ✅ CORE FIX */
+  max-height: calc(100dvh - 40px);   /* ใช้ dvh แทน vh */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+
+  transform: translateY(100%);
+  transition: transform var(--dur-sheet) var(--ease-out);
+
+  z-index: 101;
+}
+
+.sheet.show{
+  transform: translateY(0);
+}
+
+.sheet h3{
+  margin:0 0 12px;
+}
+
+
+
+/* ================= BASE INPUT (NEUTRAL) ================= */
+input,
+select {
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  font-family: inherit;
+  background: rgba(255,255,255,.9);
+  color: #111;                 /* 🔴 FIX: text มองเห็นชัดใน light mode */
+}
+
+/* 🔴 NEW: textarea base style (Light mode fix) */
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  background: #fff;
+  color: #111;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+}
+  
+input::placeholder,
+textarea::placeholder {
+  color: #999;                 /* 🔴 FIX: placeholder ไม่จางเกินไป */
+}  
+
+input:focus,
+select:focus {
+  border-color: #007aff;
+}
+
+/* ================= STEP 3: FORM CONSISTENT ================= */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.form-group label {
+  font-size: 13px;
+  color: #666;
+}
+
+/* ================= FORM INPUT (UNIFIED) ================= */
+
+/* ทุก input / select ใน form + กัน iOS zoom */
+.form-group input,
+.form-group select {
+  width: 100%;
+  height: 44px;
+  padding: 10px 12px;
+
+  font-size: 16px;          /* 🔴 FIX iOS ZOOM */
+  line-height: 1.2;
+
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  box-sizing: border-box;
+  background: #fff;
+  font-family: inherit;
+}
+
+/* number ต้องเหมือน text (iOS / Android) */
+.form-group input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+/* focus state */
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #007aff;
+  outline: none;
+}
+
+  /* ✅ เพิ่มตรงนี้ */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+ .btn-remove{
+  padding:6px 12px;
+  border-radius:10px;
+  background:#ff3b30;
+  color:#fff;
+  border:none;
+
+  font-size:13px;
+  font-weight:600;
+  line-height:1;
+
+  cursor:pointer;
+ }
+  /* ✅ เพิ่มตรงนี้ */
+.btn-remove:active {
+  transform: scale(var(--tap-scale-icon));
+}
+
+/* interaction: use .btn:active as single source of truth */
+  
+/* ================= BUTTON SYSTEM ================= */
+
+.btn {
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition:
+    transform var(--dur-tap) var(--ease-tap),
+    box-shadow var(--dur-tap) ease;
+}
+
+/* Primary */
+.btn-primary {
+  background: #007aff;
+  color: #fff;
+}
+
+/* Secondary (soft green) */
+.btn-secondary {
+  background: #34c759;
+  color: #fff;
+}
+
+/* Outline (cancel / back) */
+.btn-outline {
+  background: #f2f2f7;
+  color: #333;
+  border: 1px solid #ddd;
+}
+
+/* Danger (logout / destructive) */
+.btn-danger{
+  background:#ff3b30;
+  color:#fff;
+}
+.btn-danger:active{
+  transform: scale(var(--tap-scale-primary));
+}
+
+/* Interaction */
+.btn:active {
+  transform: scale(var(--tap-scale-primary));
+}
+
+  .cart-item{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  padding:12px 0;
+  border-bottom:1px dashed rgba(0,0,0,.08);
+  }
+
+ .cart-item > div:first-child {
+   flex: 1;
+   min-width: 0; /* 🔴 สำคัญมาก: ให้ text ถูกตัดได้ */
+ }
+
+ .cart-item > div:last-child {
+   flex-shrink: 0;
+   text-align: right;
+ }
+
+ .cart-item .price{
+   margin-top:2px;
+ }
+
+ .cart-item-right{
+   display:flex;
+   align-items:center;   /* 🔴 หัวใจ: align กับราคา */
+   gap:8px;
+ }
+ 
+
+  .total{
+  font-size:18px;
+  font-weight:700;
+  text-align:right;
+  margin-top:16px;
+  padding-top:12px;
+  border-top:1px solid rgba(0,0,0,.08);
+  }
+
+#cartSheet .btn-primary{
+  margin-top:16px;
+  margin-bottom:12px;
+}
+
+#cartSheet{
+  padding-bottom: calc(env(safe-area-inset-bottom) + 28px);
+}
+  
+  /* ===== Order Preview (Hidden) ===== */
+  #orderPreview {
+    width: 360px;
+    padding: 16px;
+    background: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    display: none;
+  }
+  #orderPreview h2 {
+    margin: 0 0 8px;
+  }
+  #orderPreview .item {
+    display:flex;
+    justify-content:space-between;
+    margin-bottom:6px;
+    font-size:14px;
+  }
+  #orderPreview .footer {
+    margin-top:12px;
+    font-weight:700;
+    text-align:right;
+  }
+
+/* ================= HEADER SEARCH (iOS-LIKE) ================= */
+.viewer-search-wrap{
+   margin-top:6px;
+   max-width:100%;
+ }  
+
+.search-wrap {
+  display: flex;
+  align-items: center;
+  position: relative;
+  max-width: 100%;
+  min-width: 0;          /* 🔴 กันดัน layout */
+  overflow: visible;     /* ✅ ให้เงาปุ่มวงกลมไม่โดนตัดเป็นเหลี่ยม */
+}
+
+.search-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,.45);
+  position: relative;
+  overflow: hidden;
+
+  /* ✅ Match filter/menu: Apple-nimble glass */
+  background: rgba(255,255,255,.55);
+  backdrop-filter: blur(16px) saturate(170%);
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+
+  box-shadow: var(--shadow-control);
+  cursor: pointer;
+  color: rgba(17,17,17,.92); /* svg uses currentColor */
+  -webkit-tap-highlight-color: transparent;
+
+  transition:
+    transform var(--dur-tap) var(--ease-tap),
+    background var(--dur-tap) ease,
+    box-shadow var(--dur-tap) ease;
+}
+
+/* ✅ Glass highlight (same language as filter/menu) */
+.search-btn::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  z-index:0;
+  background:
+    radial-gradient(70% 55% at 28% 22%,
+      rgba(255,255,255,.95) 0%,
+      rgba(255,255,255,.55) 26%,
+      rgba(255,255,255,0) 60%);
+  opacity:.45;
+  pointer-events:none;
+  mix-blend-mode: screen;
+}
+.search-btn::after{
+  content:none;
+}
+.search-btn > *{ position: relative; z-index: 2; }
+  
+.search-btn:active {
+  transform: scale(var(--tap-scale-icon));
+  background: rgba(0,0,0,.08);
+  box-shadow: var(--shadow-card-pressed);
+}
+
+@media (hover:hover){
+  .search-btn:hover{
+    background: rgba(0,0,0,.06);
+  }
+}
+  
+.search-input {
+   width: 0;             /* 🔴 สำคัญ: ตอนยังไม่ active ต้องไม่กินพื้นที่ */
+   opacity: 0;
+   margin-left: 0;
+   height: 40px;
+   padding: 0;
+
+   font-size: 16px;
+   border-radius: 12px;
+   border: 0;
+
+   background: rgba(255,255,255,.85);
+   color: #111;    /* ✅ อ่านชัดใน light mode */
+   backdrop-filter: blur(14px);
+
+  pointer-events: none;
+
+  transform: translateX(-6px) scaleX(.6);
+  transform-origin: left center;
+
+  transition:
+    opacity .18s ease,
+    transform .45s cubic-bezier(.34,1.56,.64,1),
+    width .35s ease,
+    margin-left .35s ease,
+    padding .35s ease;
+}
+
+/* 🔥 ACTIVE STATE */
+.search-wrap.active .search-input {
+  opacity: 1;
+  transform: translateX(0) scaleX(1);
+  pointer-events: auto;
+  width: min(220px, calc(100vw - 200px)); /* 🔴 ลด/ยืดตามจอ ไม่ดัน filter+menu */
+  margin-left: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(0,0,0,.12);
+}
+
+/* 🔹 subtle focus glow (iOS feel) */
+.search-input:focus {
+  border-color: #007aff;
+  box-shadow:
+    0 0 0 3px rgba(0,122,255,.18);
+  outline: none;
+}
+
+/* ✅ STEP 3+4: SVG icon (monochrome) */
+.icon-sf{
+  width: 18px;
+  height: 18px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: .92;
+}
+ /* ================= FILTER ICON DROPDOWN ================= */
+ .filter-wrap{ position:relative; }
+
+ .filter-btn{
+   width:40px;
+   height:40px;
+   border-radius:50%;
+   border:none;
+   position: relative;          /* ✅ needed for glass layers */
+   overflow: hidden;            /* ✅ clip highlight rim */
+   
+   /* ✅ Apple-nimble glass (less "3D") */
+  background: rgba(255,255,255,.55);
+  backdrop-filter: blur(16px) saturate(170%);
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+   cursor:pointer;
+   color: rgba(17,17,17,.92);
+   display:flex;
+   align-items:center;
+   justify-content:center;
+   -webkit-tap-highlight-color: transparent;
+   transition:
+     transform var(--dur-tap) var(--ease-tap),
+     background var(--dur-tap) ease,
+     box-shadow var(--dur-tap) ease;
+
+   /* ✅ Token shadow (unified depth) */
+  border: 1px solid rgba(255,255,255,.45);
+  box-shadow: var(--shadow-control);
+ }
+
+ /* ✅ Glass highlight (top-left glare) */
+.filter-btn::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  z-index: 0;
+  background: radial-gradient(70% 55% at 28% 22%,
+    rgba(255,255,255,.65) 0%,
+    rgba(255,255,255,0) 58%);
+  opacity:.45;
+  pointer-events:none;
+  mix-blend-mode: screen;
+}
+
+/* ✅ Inner rim (second ring) */
+.filter-btn::after{
+  content:none;
+} 
+  
+ .filter-btn:active{
+   transform: scale(var(--tap-scale-icon));
+   /* ✅ press = simpler, less 3D */
+   background: rgba(0,0,0,.08);
+  box-shadow: var(--shadow-card-pressed);
+ }
+
+ @media (hover:hover){
+  .filter-btn:hover{
+    background: rgba(0,0,0,.06);
+  }
+}
+  
+ .filter-btn .icon{
+   position: relative;
+   z-index: 2;
+   width:18px;
+   height:18px;
+   fill: currentColor;
+   opacity:.9;
+ }
+  
+ .filter-dropdown{
+   position:absolute;
+   top:52px;
+   right:0;
+   min-width:200px;
+   padding:10px;
+   border-radius:18px;
+   /* 🔴 CHANGED: เพิ่ม contrast + ขอบ + แยกชั้นให้ชัด */
+   background: rgba(255,255,255,.92);
+   backdrop-filter: blur(26px) saturate(180%);
+   -webkit-backdrop-filter: blur(26px) saturate(180%);
+   border: 1px solid rgba(0,0,0,.08);
+   box-shadow: var(--shadow-floating);
+   color: rgba(17,17,17,.92);
+   display:none;
+   flex-direction:column;
+   gap:6px;
+ }
+
+ .filter-dropdown.show{ display:flex; }
+
+ .filter-item{
+   /* 🔴 CHANGED: ทำให้แต่ละแถวอ่านง่าย + มี state */
+   padding: 10px 12px;
+   border-radius: 12px;
+   font-size: 14px;
+   font-weight: 600;
+   color: rgba(17,17,17,.88);
+   cursor: pointer;
+   user-select: none;
+   transition: background .16s ease, transform .16s ease;
+ }
+
+ /* 🔴 CHANGED: เส้นแบ่งแบบ iOS (ช่วยแยก item ไม่ให้กลืน) */
+ .filter-item + .filter-item{
+   border-top: 1px solid rgba(0,0,0,.06);
+ }
+
+ /* 🔴 CHANGED: hover/active ให้รู้ว่ากดได้ */
+ @media (hover:hover){
+   .filter-item:hover{
+     background: rgba(0,0,0,.06);
+   }
+ }
+ .filter-item:active{
+   background: rgba(0,0,0,.10);
+   transform: scale(.985);
+ } 
+  
+/* ================= HEADER MENU BUTTON (iOS TACTILE) ================= */
+.menu-btn{
+  width:40px;
+  height:40px;
+  border:none;
+  border-radius:50%;
+  position: relative;
+  overflow: hidden;
+
+  /* ✅ Match filter-btn: Apple-nimble glass (less 3D) */
+  background: rgba(255,255,255,.55);
+  backdrop-filter: blur(16px) saturate(170%);
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+  border: 1px solid rgba(255,255,255,.45);
+  box-shadow: var(--shadow-control);
+
+  color: rgba(17,17,17,.92); /* ✅ correct in light */
+  cursor:pointer;
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  transition:
+    transform var(--dur-tap) var(--ease-tap),
+    background var(--dur-tap) ease,
+    box-shadow var(--dur-tap) ease;
+
+  -webkit-tap-highlight-color: transparent;
+}
+
+
+/* ✅ Glass highlight (like filter) */
+.menu-btn::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  z-index:0;
+  background:
+    radial-gradient(70% 55% at 28% 22%,
+      rgba(255,255,255,.95) 0%,
+      rgba(255,255,255,.55) 26%,
+      rgba(255,255,255,0) 60%);
+  opacity:.45;
+  pointer-events:none;
+  mix-blend-mode: screen;
+}
+.menu-btn::after{
+  content:none;
+}
+  
+.menu-btn > *{ position: relative; z-index: 2; }  
+  
+.menu-btn:active{
+  transform: scale(var(--tap-scale-icon));
+  background: rgba(0,0,0,.08);
+  box-shadow: var(--shadow-card-pressed);
+}
+
+@media (hover:hover){
+  .menu-btn:hover{
+    background: rgba(0,0,0,.06);
+  }
+}
+  
+@media (prefers-color-scheme: dark){
+  .menu-btn{
+    background:
+      radial-gradient(120% 120% at 30% 25%,
+        rgba(255,255,255,.18) 0%,
+        rgba(44,44,46,.62) 45%,
+        rgba(0,0,0,.28) 100%);
+    color: rgba(255,255,255,.92);
+    border: 1px solid rgba(255,255,255,.14);
+    box-shadow: var(--shadow-control);
+  }
+  .menu-btn::before{ opacity: .55; }
+}
+  /* ================= PRODUCT CARD (HORIZONTAL) ================= */
+.product-card {
+  display: flex;
+  gap: 12px;
+  background: rgba(255,255,255,.72);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: var(--shadow-card);
+  align-items: center;
+  cursor: pointer;
+  transition:
+    transform var(--dur-chrome) var(--ease-chrome),
+    box-shadow var(--dur-chrome) ease;
+}
+
+@media (hover:hover){
+  .product-card:hover{
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-float);
+  }
+}  
+
+.product-card .thumb {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #f0f0f0;
+  flex-shrink: 0;
+}
+
+.product-card .info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.product-card .name {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.product-card .sku {
+  font-size: 12px;
+  color: #888;
+}
+
+.product-card .price {
+  color: #007aff;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.product-card .meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  color: #555;
+}
+
+.product-card:active {
+  transform: scale(var(--tap-scale-card));
+  box-shadow: var(--shadow-card-pressed);
+}  
+
+ /* ================= PRODUCT INFO SHEET (DETAILS) ================= */
+/* 🔴 CHANGED: wrap rules + readability (กันข้อความ/URL ล้นกรอบ + อ่านชัด iOS) */
+
+.product-info-images {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 12px 0;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.product-info-zoom{
+  cursor: zoom-in;
+}
+
+.product-info-images img {
+  height: 120px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.product-info-block {
+  background: rgba(255,255,255,.72);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border-radius: 14px;
+  padding: 14px;
+
+  /* ✅ iOS readability */
+  color: rgba(17,17,17,.92);
+  font-size: 15px;
+  line-height: 1.58;
+  letter-spacing: .1px;
+
+  /* ✅ HARD FIX: กันข้อความ/URL ยาวล้นกรอบ */
+  max-width: 100%;
+  overflow-wrap: anywhere;   /* ตัวหลักสำหรับ URL ยาว */
+  word-break: break-word;    /* fallback */
+  hyphens: auto;
+}
+
+.product-info-block ul{
+  margin: 0;
+  padding-left: 18px;        /* ไม่ให้ indent ลึกเกินบนมือถือ */
+}
+
+.product-info-block li{
+  margin: 8px 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.product-info-block a{
+  color: #007aff;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.product-info-block a:active{
+  opacity: .75;
+}
+
+@media (prefers-color-scheme: dark){
+  .product-info-block{
+    background: rgba(28,28,30,.72);
+    color: rgba(255,255,255,.92);
+    border: 1px solid rgba(255,255,255,.08);
+  }
+  .product-info-block a{
+    color: #4da3ff;
+  }
+}
+
+/* คงของเดิม */
+.sheet-product {
+  min-height: 60dvh;   /* 🔴 ปรับได้: 65–80 */
+}
+/* ===== Status Badge (Viewer) ===== */
+.status {
+  padding: 3px 10px;
+  min-height: 22px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* พร้อมส่ง */
+.status.ready {
+  background: rgba(52,199,89,.15);
+  color: #34c759;
+}
+
+/* อยู่ระหว่างจัดส่ง */
+.status.shipping {
+  background: rgba(0,122,255,.15);
+  color: #007aff;
+}
+
+/* อยู่โกดังไทย */
+.status.warehouse {
+  background: #eef3ff;
+  color: #3b6cff;
+}
+
+/* หมด */
+.status.out {
+  background: rgba(255,59,48,.15);
+  color: #ff3b30;
+}
+
+
+.admin-action {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.btn-approve {
+  flex: 1;
+  background: #007aff;
+  color: #fff;
+}
+
+.btn-reject {
+  flex: 1;
+  background: #ff3b30;
+  color: #fff;
+}
+
+.btn-approve:active,
+.btn-reject:active {
+  transform: scale(var(--tap-scale-primary));
+}
+
+/* ================= SIDE ADMIN MENU ================= */
+.side-menu {
+  position: fixed;
+  top: 0;
+  right: 0;
+
+  width: min(65vw, 260px);
+   /* ✅ ลดลงอีกนิด กำลังพอดี */
+  height: 100vh;
+
+  background: rgba(255,255,255,.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: var(--shadow-side);
+
+  z-index: 102;
+  padding: 16px;            /* ✅ ลด padding ให้ดูไม่อึดอัด */
+
+  transform: translateX(100%);
+  transition: transform var(--dur-sheet) var(--ease-out);
+  will-change: transform;
+}
+
+.side-menu.show {
+  transform: translateX(0);
+}
+
+/* ===== UI DETAILS ===== */
+.side-menu h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.side-menu .menu-btn {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.loading {
+  text-align: center;
+  padding: 32px 16px;
+  color: #666;
+  font-size: 14px;
+}
+
+.loading::after {
+  content: "…";
+  animation: dots 1.4s infinite;
+}
+
+@keyframes dots {
+  0%   { content: ""; }
+  33%  { content: "."; }
+  66%  { content: ".."; }
+  100% { content: "..."; }
+}
+
+.menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.menu-group.danger {
+  margin-top: 12px;
+}
+
+/* 🔒 iOS SAFARI ZOOM FIX */
+input,
+select,
+textarea {
+  font-size: 16px !important; /* 🔴 สำคัญที่สุด */
+} 
+
+/* ===== STOCK TIMELINE COLOR TAG ===== */
+.timeline-tag {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* สีตามประเภท */
+.tag-in {
+  background: #e6f9f0;
+  color: #1e9c6a;
+}
+
+.tag-out {
+  background: #fdecec;
+  color: #d93025;
+}
+
+.tag-create {
+  background: #eef3ff;
+  color: #3b6cff;
+}
+
+.tag-adjust {
+  background: #fff4e5;
+  color: #e37400;
+}
+
+.tag-cancel {
+  background: #f1f1f1;
+  color: #666;
+}
+
+/* ===== ADMIN LOGIN TWEAK ===== */
+#adminLoginSheet {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 24px); /* 🔴 ยกขึ้นจากขอบ */
+}
+
+/* ===== PREMIUM INPUT STYLE ===== */
+.form-group input,
+.form-group select,
+#adminLoginSheet input,
+#adminLoginSheet select {
+  background: #f9f9fb;
+  border: 1px solid #e5e5ea;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.04);
+  color: #111; /* 🔴 FIX: บังคับ text ให้มองเห็นแน่นอน */
+}
+
+.form-group input:focus,
+#adminLoginSheet input:focus {
+  background: #fff;
+  border-color: #007aff;
+  box-shadow:
+    0 0 0 2px rgba(0,122,255,.15),
+    inset 0 1px 2px rgba(0,0,0,.04);
+} 
+
+/* ================= TOAST SYSTEM (GLOBAL FEEDBACK) ================= */
+
+#toast-container {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 24px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3000;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  pointer-events: none; /* 🔒 ไม่บัง interaction */
+}
+
+.toast {
+  min-width: 260px;
+  max-width: 90vw;
+  padding: 12px 16px;
+
+  border-radius: 14px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+
+  box-shadow: var(--shadow-float);              /* 🔴 ใช้ token เดียวกับระบบ */
+
+  backdrop-filter: blur(18px) saturate(160%);   /* 🔴 เพิ่ม glass */
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+
+  animation: toast-slide-down .25s ease;
+}
+
+/* ===== Toast Variants ===== */
+.toast.success { background: rgba(52,199,89,.92); }
+.toast.error   { background: rgba(255,59,48,.92); }
+.toast.warning { background: rgba(255,159,10,.92); }
+.toast.info    { background: rgba(0,122,255,.92); }
+
+/* ===== Animation (namespaced) ===== */
+@keyframes toast-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hidden {
+  display: none;
+}
+
+#loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+#loading-overlay.hidden {
+  display: none !important;
+}
+
+.loading-box {
+  background: rgba(255,255,255,.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  padding: 20px 24px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-float);
+  text-align: center;
+  min-width: 200px;
+}
+
+.skeleton-list{
+  display:grid;
+  gap:16px;
+}
+.skeleton-card{
+  height:104px;
+  border-radius:16px;
+  background: rgba(255,255,255,.72);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: var(--shadow-card);
+  position: relative;
+  overflow:hidden;
+}
+.skeleton-card::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    linear-gradient(90deg,
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,.55) 45%,
+      rgba(255,255,255,0) 90%);
+  transform: translateX(-120%);
+  animation: shimmer 1.15s infinite;
+}
+.skeleton-row{
+  display:flex;
+  gap:12px;
+  padding:12px;
+}
+.skeleton-thumb{
+  width:80px;height:80px;border-radius:12px;
+  background: rgba(0,0,0,.06);
+  flex-shrink:0;
+}
+.skeleton-lines{flex:1;display:flex;flex-direction:column;gap:10px;padding-top:6px;}
+.skeleton-line{
+  height:12px;border-radius:999px;
+  background: rgba(0,0,0,.06);
+}
+.skeleton-line.w70{width:70%}
+.skeleton-line.w45{width:45%}
+.skeleton-line.w30{width:30%}
+
+@keyframes shimmer{
+  to { transform: translateX(120%); }
+}
+
+@media (prefers-color-scheme: dark){
+  .skeleton-card{
+    background: rgba(28,28,30,.72);
+  }
+  .skeleton-thumb,
+  .skeleton-line{
+    background: rgba(255,255,255,.08);
+  }
+  .skeleton-card::before{
+    background: linear-gradient(90deg,
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,.16) 45%,
+      rgba(255,255,255,0) 90%);
+  }
+}  
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #ddd;
+  border-top-color: #555;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+ /* ================= QTY INPUT (CART / ADD TO CART) ================= */
+
+ /* wrapper เฉพาะช่องจำนวน */
+ .qty-input {
+   position: relative;
+ }
+
+ /* input number สำหรับจำนวน */
+ .qty-input input[type="number"] {
+   height: 52px;                    /* สูงขึ้น → ดูเป็น control */
+   padding: 12px 44px;              /* เผื่อพื้นที่ icon */
+   text-align: center;              /* จำนวนต้องอยู่กลาง */
+
+   font-size: 18px;
+   font-weight: 600;
+
+   border-radius: 16px;
+   border: 1px solid rgba(0,0,0,.08);
+
+   background: rgba(255,255,255,.9);
+   backdrop-filter: blur(6px);
+
+   box-shadow:
+     inset 0 1px 2px rgba(0,0,0,.05),
+     var(--shadow-control);
+
+   transition: box-shadow .2s ease, border-color .2s ease;
+ }
+
+ /* focus = glow */
+ .qty-input input[type="number"]:focus {
+   border-color: #007aff;
+   box-shadow:
+     0 0 0 3px rgba(0,122,255,.18),
+     inset 0 1px 2px rgba(0,0,0,.05);
+ }
+
+ /* ซ่อน spin button เดิม */
+ .qty-input input[type="number"]::-webkit-inner-spin-button,
+ .qty-input input[type="number"]::-webkit-outer-spin-button {
+   -webkit-appearance: none;
+   margin: 0;
+ }
+
+ /* ================= QTY ACTION (BOTTOM SAFE) ================= */
+.qty-action {
+  margin-top: 16px;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
+}
+
+/* 🔒 จำกัดเฉพาะหน้าแก้ไขสินค้า (Admin) */
+#adminProductEditSheet img {
+  width: 100%;
+  max-width: 120px;        /* 🔴 ลดลงอย่างมาก */
+  height: auto;
+  aspect-ratio: 1 / 1;
+
+  object-fit: cover;
+  border-radius: 12px;
+
+  margin: 8px auto 12px;   /* กินพื้นที่น้อย */
+  display: block;
+
+  box-shadow: var(--shadow-image);
+}
+
+/* ลดช่องว่างรอบ ๆ รูป */
+#adminProductEditSheet {
+  padding-top: 12px;
+}
+
+/* ให้ form ชิดขึ้น */
+#adminProductEditSheet .form-group {
+  margin-bottom: 10px;
+}
+
+/* ================= IMAGE FULLSCREEN VIEWER ================= */
+#imageViewerSheet img {
+  max-width: 100%;
+  max-height: 100dvh;
+  object-fit: contain;
+}
+
+#imageViewerSheet .close-btn {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 14px);
+  right: 14px;
+
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+
+  background: rgba(0,0,0,.6);
+  color: #fff;
+  font-size: 24px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+  z-index: 5;
+}
+
+ .image-viewer-sheet{
+   padding: 0;                 /* 🔴 moved from inline */
+   display: flex;              /* 🔴 moved from inline */
+   align-items: center;        /* 🔴 moved from inline */
+   justify-content: center;    /* 🔴 moved from inline */
+   cursor: zoom-out;           /* 🔴 moved from inline */
+ }
+
+ .image-viewer-fullscreen{
+   position: fixed;
+   inset: 0;
+   padding: 0;
+   border-radius: 0;
+   max-height: 100dvh;
+   transform: none;
+   z-index: 9999;
+   background: transparent;
+ }
+
+ .image-viewer-bg{
+   position:absolute;
+   inset:0;
+   background:#000;
+ }
+
+ .image-viewer-close{
+   position:absolute;
+   top:16px;
+   right:16px;
+   z-index:2;
+ }
+
+ .image-viewer-img{
+   position:relative;
+   z-index:1;
+   width:100%;
+   height:100%;
+   object-fit:contain;
+   cursor:default;
+ }
+
+ 
+/* =================================================
+   📦 PRODUCT SHEET – SHARED UI CLASSES
+   ใช้แทน inline-style ใน renderProductSheet
+   (ไม่กระทบ logic / flow)
+   ================================================= */
+
+/* ❌ ปุ่มปิด Sheet (มุมขวาบน) */
+.sheet-close-btn {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: 12px;
+
+  width: 36px;
+  height: 36px;
+
+  border-radius: 50%;
+  border: none;
+
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+}
+
+.sheet-close-btn:active {
+  transform: scale(var(--tap-scale-icon));
+}
+
+/* 🏷️ ชื่อสินค้าใน Product Sheet */
+.product-title {
+  margin-top: 4px;
+}
+
+.product-sku {
+   color: #888;
+   font-size: 13px;
+   margin-bottom: 8px;
+ }
+
+ .product-detail-btn {
+   margin-top: 12px;
+ }
+
+ .product-info-close-btn{
+   font-size:16px;
+   color:#fff;
+ }
+   
+/* 🖼️ รูปสินค้า (มาตรฐาน) */
+.product-image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+
+  object-fit: cover;
+
+  border-radius: 14px;
+  margin: 12px 0;
+
+  background: #f0f0f0;
+}
+
+/* 📝 หมายเหตุสินค้า (Note) */
+.product-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+
+  font-size: 14px;
+  line-height: 1.45;
+  color: #555;
+
+  background: #f9f9fb;
+  border-radius: 12px;
+  border: 1px dashed rgba(0,0,0,.12);
+}
+
+/* 🔹 Action Zone (ปุ่มล่างสุด) */
+.product-action-zone {
+  margin-top: 20px;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
+}
+
+/* 🔧 ข้อความโหมดแอดมิน */
+.product-admin-hint {
+  margin-top: 16px;
+  color: #888;
+  font-size: 14px;
+}
+
+ .admin-motto{
+   font-size:13px;
+   margin-left:7px;
+   margin-top:4px;
+   color:#ff3b30;
+   opacity:.9;
+   letter-spacing:.3px;
+ }
+
+ @media (prefers-color-scheme: dark){
+   .admin-motto{
+     color:#ff6b6b;
+   }
+ }
+  
+ @media (prefers-color-scheme: dark) {
+   html, body {
+    background: #0f0f12;
+  }
+
+  :root{
+    --text-secondary: rgba(235,235,245,.75); /* 🔴 ชัดขึ้นใน dark */
+    /* STEP 2: dark shadow harmony */
+    --shadow-card:            0 10px 34px rgba(0,0,0,.65);
+    --shadow-control:         0 8px 22px rgba(0,0,0,.60);
+    --shadow-image:           0 6px 18px rgba(0,0,0,.65);
+    --shadow-header:          0 8px 32px rgba(0,0,0,.5);
+    --shadow-header-scrolled: 0 16px 42px rgba(0,0,0,.65);
+    --shadow-floating:        0 10px 34px rgba(0,0,0,.6);
+    --shadow-side:            -6px 0 24px rgba(0,0,0,.6);
+    --shadow-fab:             0 12px 34px rgba(0,0,0,.6);
+    /* keep pressed + canvas consistent in dark */
+    --shadow-card-pressed:    0 6px 18px rgba(0,0,0,.55);
+    --shadow-canvas-card:     var(--shadow-card);
+
+    /* legacy alias */
+    --shadow-float:           var(--shadow-floating);
+  }
+} 
+
+  /* 🔹 FLOATING BAR (DARK) */
+  #floatingBar{
+    background:rgba(28,28,30,.55);
+    color:#f5f5f7;
+
+    border:1px solid rgba(255,255,255,.08);
+
+    box-shadow:
+      var(--shadow-floating),
+      inset 0 1px 0 rgba(255,255,255,.08);
+  } 
+
+   .product-image {
+     background: rgba(44,44,46,.8);
+   }
+   
+   .product-card,
+   .card,
+   .sheet,
+   .side-menu,
+   .loading-box {
+     background: rgba(28,28,30,.72);
+     color: #f5f5f7;
+   }
+
+.filter-btn{
+    background:
+      radial-gradient(120% 120% at 30% 25%,
+        rgba(255,255,255,.18) 0%,
+        rgba(44,44,46,.62) 45%,
+        rgba(0,0,0,.28) 100%);
+    color: rgba(255,255,255,.92);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    border: 1px solid rgba(255,255,255,.14);
+    box-shadow:
+      0 12px 26px rgba(0,0,0,.55),
+      inset 0 1px 0 rgba(255,255,255,.12),
+      inset 0 -10px 18px rgba(0,0,0,.35);
+  }
+
+  /* ✅ ลด glare (highlight) ของแก้วในโหมดมืด */
+  .filter-btn::before{ opacity: .55; }
+ } /* end @media (prefers-color-scheme: dark) */
+
+@media (prefers-color-scheme: dark){
+  .filter-dropdown{
+    /* 🔴 CHANGED: เพิ่ม contrast + ขอบให้ชัด */
+    background: rgba(44,44,46,.96);
+    color: rgba(245,245,247,.92);
+    border: 1px solid rgba(255,255,255,.12);
+  }
+
+  .filter-item:hover{
+    /* 🔴 CHANGED: hover ชัดขึ้น */
+    background: rgba(255,255,255,.10);
+  }
+
+ 
+  /* 🔴 CHANGED: active ในโหมดมืด */
+  .filter-item:active{
+    background: rgba(255,255,255,.14);
+    transform: scale(.985);
+  }
+  
+  .search-btn {
+    background:
+      radial-gradient(120% 120% at 30% 25%,
+        rgba(255,255,255,.18) 0%,
+        rgba(44,44,46,.62) 45%,
+        rgba(0,0,0,.28) 100%);
+    color: rgba(255,255,255,.92);
+    border: 1px solid rgba(255,255,255,.14);
+    box-shadow: var(--shadow-control);
+  }
+
+  .search-input {
+    background: rgba(44,44,46,.9);
+    border: 1px solid rgba(255,255,255,.08);
+    color: #fff;
+  }
+  
+.product-note {
+    background: rgba(44,44,46,.8);
+    border: 1px dashed rgba(255,255,255,.08);
+    color: #ddd;
+  }
+
+  .product-info-block {
+    background: rgba(44,44,46,.75);
+  }
+
+  .qty-input input[type="number"] {
+    background: rgba(44,44,46,.9);
+    border: 1px solid rgba(255,255,255,.08);
+    color: #fff;
+  }
+
+  input,
+  select,
+  textarea {
+    background: rgba(44,44,46,.8);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.08);
+  }
+} /* end @media (prefers-color-scheme: dark) */
+
+ /* ================= DARK MODE LIQUID HEADER ================= */
+
+@media (prefers-color-scheme: dark){
+  .shop-title,
+  .admin-title{
+    
+    color: rgba(255,255,255,.92);
+    background:
+      radial-gradient(120% 120% at 30% 25%,
+        rgba(255,255,255,.18) 0%,
+        rgba(44,44,46,.62) 45%,
+        rgba(0,0,0,.28) 100%);
+    border: 1px solid rgba(255,255,255,.14);
+    box-shadow: var(--shadow-control);
+    text-shadow:
+      0 0 10px rgba(0,0,0,.70),
+      0 0 22px rgba(0,0,0,.45);
+  }
+  .shop-title::before,
+  .admin-title::before{ opacity: .55; }
+ 
+  header{
+    background: rgba(28,28,30,.55);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+
+    box-shadow:
+      var(--shadow-header),
+      inset 0 -1px 0 rgba(255,255,255,.06);
+  }
+
+  header.scrolled{
+    background: rgba(28,28,30,.75);
+    box-shadow:
+      var(--shadow-header-scrolled),
+      inset 0 -1px 0 rgba(255,255,255,.08);
+  }
+}
+/* ================= FLOATING BOTTOM BAR ================= */
+
+/* 🔴 CHANGED: Clean + deterministic cascade (กัน opacity สลับทิศ) */
+#floatingBar{
+  position: fixed !important;
+  left: 16px;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 18px) !important;
+  max-width: 520px;
+  margin: 0 auto;
+
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 18px;
+
+  background: rgba(255,255,255,.78);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255,255,255,.85);
+  box-shadow:
+    var(--shadow-floating),
+    inset 0 1px 0 rgba(255,255,255,.85);
+
+  z-index: 999;
+
+  /* default = hidden */
+  transform: translateY(120%);
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;            /* 🔍 FIX: บังคับซ่อนจริง (กัน opacity ค้าง) */
+  
+  transition:
+    transform .48s cubic-bezier(.34,1.56,.64,1),
+    opacity .3s ease;
+  will-change: transform, opacity;
+}
+
+/* ✅ Cart bar text readability (เฉพาะ floatingBar) */
+#floatingBar .bar-left{
+  min-width: 0;
+}
+#floatingBar .bar-subtext{
+  font-size: 13px;
+  color: rgba(17,17,17,.80); /* ชัดกว่า .65 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+@media (prefers-color-scheme: dark){
+  #floatingBar .bar-subtext{
+    color: rgba(245,245,247,.82);
+  }
+}  
+
+#floatingBar.bounce-in{
+  animation: float-bounce .65s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes float-bounce{
+  0%   { transform:translateY(120%) scale(.94); }
+  60%  { transform:translateY(-6px) scale(1.02); }
+  100% { transform:translateY(0) scale(1); }
+}
+
+#floatingBar .total-animate{ animation: total-pop .25s ease; }
+@keyframes total-pop{
+  0%   { transform:scale(.92); opacity:.6; }
+  100% { transform:scale(1); opacity:1; }
+}
+
+/* ✅ SHOW = only show */
+ #floatingBar.show{
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible; /* 🔴 FIX: เพราะ default ตั้ง hidden ไว้ */ 
+ }
+
+/* ✅ HIDE (scroll) */
+#floatingBar.scroll-hide{
+  transform: translateY(120%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* ✅ HIGHEST PRIORITY: show + scroll-hide must hide */
+#floatingBar.show.scroll-hide{
+  transform: translateY(120%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+@media (prefers-color-scheme: dark){
+  #floatingBar{
+    background: rgba(28,28,30,.72);
+    color: #f5f5f7;
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow:
+      var(--shadow-floating),
+      inset 0 1px 0 rgba(255,255,255,.10);
+  }
+}
+  
+#floatingBar:active{
+  transform: translateY(0) scale(.98);
+}
+  
+/* 🔴 NEW: เมื่อมี sheet เปิดอยู่ → ให้ floatingBar ซ่อน */
+.sheet.show ~ #floatingBar{
+  opacity: 0 !important;
+  transform: translateY(20px) !important;
+  pointer-events: none !important;
+  visibility: hidden !important; /* 🔴 FIX: ซ่อนแบบ deterministic */
+}  
+  
+ /* ================= REDUCED MOTION SUPPORT ================= */
+ @media (prefers-reduced-motion: reduce){
+
+   /* 🔴 Disable global transitions */
+   * {
+     transition: none !important;
+     animation: none !important;   /* 🔴 ADD */
+   }
+
+   /* 🔴 Disable product card motion */
+   .product-card{
+     transition: none !important;
+   }
+
+   .product-card:hover{
+     transform: none !important;
+     box-shadow: var(--shadow-card) !important;
+   }
+
+   .product-card:active{
+     transform: none !important;
+   }
+
+   /* 🔴 Disable floating bar animations */
+   #floatingBar,
+   #floatingBar.bounce-in{
+     transition: none !important;
+     animation: none !important;
+   }
+
+   #floatingBar .total-animate{
+     animation: none !important;
+   }
+
+   /* 🔴 Disable toast slide animation */
+   .toast{
+     animation: none !important;
+   }
+
+   /* 🔴 Disable spinner rotation */
+   .spinner{
+     animation: none !important;
+   }
+ }
+
+/* ================= BACK TO TOP (FLOAT) ================= */
+.btnTop{
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 84px); /* ✅ ลอยเหนือ floatingBar */
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  z-index: 46; /* ✅ สูงกว่า floatingBar (45) แต่ต่ำกว่า backdrop (100) */
+
+  /* iOS glass */
+  background: rgba(255,255,255,.38);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid rgba(255,255,255,.55);
+  box-shadow:
+    var(--shadow-fab),
+    inset 0 1px 0 rgba(255,255,255,.75);
+  color: #111;
+  font-size: 18px;
+  font-weight: 700;
+
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px) scale(.96);
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.btnTop.show{
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+  pointer-events: auto;
+}
+.btnTop:active{
+  transform: translateX(-50%) translateY(1px) scale(.97);
+}
+
+@media (prefers-color-scheme: dark){
+  .btnTop{
+    background: rgba(28,28,30,.65);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.08);
+  }
+} 
+
+/* ================= CONTINUE MODE (ADMIN ADD PRODUCT) ================= */
+/* 🔴 FIX: กันข้อความ "เพิ่มต่อเนื่อง..." ชิดขอบ/ไม่ wrap ในมือถือ */
+#adminAddProductSheet .continue-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  min-width:0;
+}
+
+/* 🔴 FIX: checkbox ห้ามโดน input{width:100%} */
+#adminAddProductSheet .continue-row input[type="checkbox"]{
+  width:18px !important;
+  height:18px !important;
+  flex:0 0 18px;
+  margin:0;
+}
+
+/* 🔴 FIX: ข้อความต้อง wrap ได้ + ไม่ชิดขอบ */
+#adminAddProductSheet .continue-row .continue-text{
+  min-width:0;
+  flex:1;
+  white-space:normal;
+  word-break:break-word;
+  line-height:1.25;
+  padding-right:6px; /* กันชิดขอบขาว */
+}
+  
+</style>
+</head>
+<body>
+
+<!-- 🔴 HEADER (Mode-Based Controlled) -->
+<header id="appHeader"></header>
+
+
+<div id="app" class="container"></div>
+
+<!-- ✅ GLOBAL BACKDROP (มีตัวเดียวพอ) -->
+<div id="globalBackdrop" class="backdrop" onclick="handleBackdropClick()"></div>
+
+<!-- ================= VIEWER SHEETS ================= -->
+<div id="productSheet" class="sheet sheet-product"></div>
+<div id="qtySheet" class="sheet"></div>
+<div id="cartSheet" class="sheet"></div>
+<div id="confirmSheet" class="sheet"></div>
+<div id="stockSheet" class="sheet"></div>  
+
+<!-- 🖼️ IMAGE VIEWER (FULLSCREEN) -->
+<div id="imageViewerSheet" class="sheet image-viewer-sheet">
+</div>
+
+<!-- ================= ADMIN SHEETS ================= -->
+<div id="adminLoginSheet" class="sheet"></div>
+<div id="adminDashboardSheet" class="sheet"></div>
+<div id="adminOrderSheet" class="sheet"></div>
+<div id="adminStockSheet" class="sheet"></div>
+
+<!-- 🔹 Main Menu (Side Sheet Right) -->
+<div id="mainMenuSheet" class="side-menu"></div>
+
+<!-- 🔹 Admin Product -->
+<div id="adminProductActionSheet" class="sheet"></div>
+<div id="adminProductEditSheet" class="sheet"></div>
+
+<!-- 🔹 Stock (STEP 7.5) -->
+<div id="adminStockActionSheet" class="sheet"></div>
+
+<!-- 🔹 ADD PRODUCT (STEP 7.6) ✅ เพิ่มใหม่ -->
+<div id="adminAddProductSheet" class="sheet"></div>
+
+  
+<script>
+/* ================= STEP 2: ประกาศ backdrop (UPGRADED) ================= */
+const backdrop = document.getElementById("globalBackdrop");
+const cartSheet = document.getElementById("cartSheet");
+  
+// ✅ SINGLE SOURCE OF TRUTH: sheet refs (กัน ReferenceError + กันพึ่ง global id)
+const productSheet = document.getElementById("productSheet");
+const qtySheet = document.getElementById("qtySheet");
+const confirmSheet = document.getElementById("confirmSheet");
+const stockSheet = document.getElementById("stockSheet");
+const adminLoginSheet = document.getElementById("adminLoginSheet");
+const adminDashboardSheet = document.getElementById("adminDashboardSheet");
+const adminOrderSheet = document.getElementById("adminOrderSheet");
+const adminStockSheet = document.getElementById("adminStockSheet");
+const mainMenuSheet = document.getElementById("mainMenuSheet");
+const adminProductActionSheet = document.getElementById("adminProductActionSheet");
+const adminProductEditSheet = document.getElementById("adminProductEditSheet");
+const adminStockActionSheet = document.getElementById("adminStockActionSheet");
+const adminAddProductSheet = document.getElementById("adminAddProductSheet");
+
+// ✅ expose for inline onclick handlers (ปลอดภัยสุด)
+Object.assign(window, {
+  productSheet,
+  qtySheet,
+  confirmSheet,
+  stockSheet,
+  adminLoginSheet,
+  adminDashboardSheet,
+  adminOrderSheet,
+  adminStockSheet,
+  mainMenuSheet,
+  adminProductActionSheet,
+  adminProductEditSheet,
+  adminStockActionSheet,
+  adminAddProductSheet
+});
+
+// 🔒 Intent guards (STEP 2)
+ let allowOpenOrders = false;
+ let allowOpenStockTimeline = false;
+ let allowOpenAddProduct = false;
+
+  
+/* ================= GLOBAL STATE (UPGRADED / SAFE) ================= */
+
+const state = {
+  mode: "viewer",
+
+  viewerFilter: {
+    status: "all"
+  },
+
+  // 🔴 CHANGED: เพิ่ม admin filter แยกจาก viewer (กันชน/กัน flow ปนกัน)
+  adminFilter: {
+    status: "all"
+  },
+
+  search: "",
+  viewerSearchOpen: false,
+  products: [],
+  selectedProduct: null,
+  qty: 1,
+  cart: [],
+  lastOrder: null,
+
+  // 🔒 viewer submit guard (ใช้กับ createOrder)
+  isSubmitting: false,
+
+  admin: {
+    loggedIn: false,
+    user: null,
+    token: null,
+    orders: [],
+    selectedOrder: null,
+    logs: [],
+
+    // 🔒 admin submit guard
+    isSubmitting: false
+  },
+
+  // 🧠 SMART ADD PRODUCT DRAFT
+  smartAddDraft: {
+    price: "",
+    stock: "",
+    status: "ready",
+    note: ""
+  },
+
+  ui: {
+    overlayCount: 0,
+    backdropLocked: false
+  }
+};
+
+/* ================= CART STORAGE (VIEWER ONLY) ================= */
+
+const CART_KEY = "luopanich_cart";
+
+function saveCart() {
+  try {
+    localStorage.setItem(CART_KEY, JSON.stringify(state.cart));
+  } catch (e) {
+    console.warn("saveCart failed", e);
+  }
+}
+
+function loadCart() {
+  try {
+    const raw = localStorage.getItem(CART_KEY);
+    if (!raw) return;
+
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      state.cart = parsed;
+    }
+  } catch (e) {
+    console.warn("loadCart failed", e);
+  }
+}
+
+function clearCartStorage() {
+  localStorage.removeItem(CART_KEY);
+}  
+  
+  /* ===== Feedback & Loading Utilities ===== */
+function updateLoadingText(message){
+  const text = document.getElementById("loading-text");
+  if (text) {
+    text.textContent = message;
+  }
+}
+
+function showToast(message, type = 'info', timeout = 2500) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+
+  container.appendChild(toast);
+
+  // 🔒 limit toast count (optional but pro)
+  if (container.children.length > 3) {
+    container.removeChild(container.firstChild);
+  }
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, timeout);
+}
+
+// ---------- Central loading timer ----------
+let _loadingTimer = null;
+let _loadingShownAt = 0;
+const MIN_LOADING_MS = 350; // กันกระพริบ
+
+function showLoading(message, timeoutMs = 60000) {
+  const overlay = document.getElementById("loading-overlay");
+  const text = document.getElementById("loading-text");
+  if (!overlay || !text) return;
+
+  text.textContent = message;
+  overlay.classList.remove("hidden");
+
+  // บังคับ render
+  overlay.offsetHeight;
+
+  _loadingShownAt = Date.now();
+
+  state.isSubmitting = true;
+  state.ui.backdropLocked = true;
+  if (backdrop) backdrop.style.display = "block";
+
+  clearTimeout(_loadingTimer);
+  _loadingTimer = setTimeout(() => {
+    console.warn("[showLoading] auto-hide after timeout");
+    safeHideLoading(true);
+    showToast("การเชื่อมต่อล่าช้า ระบบยกเลิกแล้ว", "warning", 1800);
+  }, timeoutMs);
+}
+
+/* ================= SAFE HIDE LOADING (SINGLE SOURCE OF TRUTH) ================= */
+/**
+ * ❗ IMPORTANT
+ * - ต้องมี safeHideLoading แค่ตัวเดียวในระบบ
+ * - ตัวนี้คือเวอร์ชันเดียวที่อนุญาตให้ใช้
+ */
+
+function safeHideLoading(fromTimeout = false) {
+  const overlay = document.getElementById("loading-overlay");
+
+  const elapsed = Date.now() - (_loadingShownAt || 0);
+  const delay = Math.max(0, MIN_LOADING_MS - elapsed);
+
+  setTimeout(() => {
+    try {
+      if (overlay) overlay.classList.add("hidden");
+
+      // 🔥 หัวใจ: เคลียร์ timer ของ showLoading
+      if (_loadingTimer) {
+        clearTimeout(_loadingTimer);
+        _loadingTimer = null;
+      }
+
+      state.isSubmitting = false;
+      // 🔒 ปลด lock เฉพาะเมื่อไม่มี overlay เปิดอยู่ (กัน confirm/flow หลุด)
+      if (state.ui.overlayCount === 0) {
+        state.ui.backdropLocked = false;
+      }
+
+      if (state.ui.overlayCount === 0 && backdrop) {
+        backdrop.style.display = "none";
+      }
+
+      console.log(
+        "[safeHideLoading] loading closed",
+        fromTimeout ? "(timeout)" : ""
+      );
+
+    } catch (e) {
+      console.error("[safeHideLoading] failed", e);
+    }
+  }, delay);
+}
+
+
+// ---------- fetchWithTimeout ----------
+async function fetchWithTimeout(input, init = {}, ms = 30000) {
+  const controller = new AbortController();
+  const signal = controller.signal;
+  const id = setTimeout(() => controller.abort(), ms);
+
+  try {
+    const res = await fetch(input, { ...init, signal });
+
+    // 🔒 เช็ค HTTP status ชัดเจน
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+
+    return res;
+
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error("การเชื่อมต่อช้าเกินไป กรุณาลองใหม่อีกครั้ง");
+    }
+    throw err;
+  } finally {
+    clearTimeout(id);
+  }
+}
+  
+
+/* ================= API LAYER ================= */
+const API_URL="https://script.google.com/macros/s/AKfycbwpe2TZW1heq82oA7uf0OMOcj_q-AYT0qjmdPplI5w1N9uYkx9jGunoqVkpMpRursh0vA/exec";
+
+const fetchProducts = async () => {
+  const res = await fetchWithTimeout(
+   `${API_URL}?action=products`,
+   {},
+   15000
+ );
+  const json = await res.json();
+
+  // 🔒 enforce standard response
+  if (!json || json.success !== true || !Array.isArray(json.data)) {
+    console.error("fetchProducts invalid response:", json);
+    return []; // ✅ คืน array เสมอ
+  }
+
+  return json.data;
+};
+
+const fetchAdminProducts = async () => {
+  if (!state.admin?.token) {
+    throw new Error("Not authenticated");
+  }
+
+  const form = new URLSearchParams();
+  form.append("action", "adminProducts");
+  form.append("token", state.admin.token);
+
+  const res = await fetchWithTimeout(
+    API_URL,
+    {
+      method: "POST",
+      body: form
+    },
+    15000
+  );
+
+  const json = await res.json();
+  if (!json || json.success !== true || !Array.isArray(json.data)) {
+    throw new Error(json?.error || "โหลดสินค้าแอดมินไม่สำเร็จ");
+  }
+
+  return json.data;
+};  
+
+function sortProducts(products) {
+  if (!Array.isArray(products)) return [];
+
+  return products.sort((a, b) =>
+    String(a.productId || "").localeCompare(
+      String(b.productId || ""),
+      'th',
+      {
+        numeric: true,
+        sensitivity: 'base'
+      }
+    )
+  );
+}
+  
+async function refreshProducts() {
+  const app = document.getElementById("app");
+
+  // ✅ Premium Skeleton เฉพาะตอน "ยังไม่มีรายการ" (ลดอาการวูบ/กระพริบ)
+  if (app && (!Array.isArray(state.products) || state.products.length === 0)) {
+    const skeleton = Array.from({ length: 6 }).map(() => `
+      <div class="skeleton-card" aria-hidden="true">
+        <div class="skeleton-row">
+          <div class="skeleton-thumb"></div>
+          <div class="skeleton-lines">
+            <div class="skeleton-line w70"></div>
+            <div class="skeleton-line w45"></div>
+            <div class="skeleton-line w30"></div>
+          </div>
+        </div>
+      </div>
+    `).join("");
+    app.innerHTML = `<div class="skeleton-list">${skeleton}</div>`;
+  }
+
+  try {
+    const list = state.mode === "admin"
+      ? await fetchAdminProducts()
+      : await fetchProducts();
+    state.products = sortProducts(list);
+    renderProducts();
+  } catch (err) {
+    console.error("refreshProducts failed:", err);
+    if (app) {
+      app.innerHTML = `
+        <div style="
+          text-align:center;
+          color:#d93025;
+          margin-top:40px;
+          font-size:15px;
+        ">
+          ไม่สามารถโหลดรายการสินค้าได้
+        </div>
+      `;
+    }
+  }
+}
+
+async function createOrder() {
+  // 🔴 HARDENING: reload stock snapshot before submit
+  const latestProducts = await fetchProducts();
+
+  for (const item of state.cart) {
+    const product = latestProducts.find(
+      p => p.productId === item.productId
+    );
+
+    if (!product) {
+      throw new Error(`ไม่พบสินค้า ${item.name}`);
+    }
+
+    if (Number(product.stock) < Number(item.qty)) {
+      throw new Error(
+        `${item.name} คงเหลือ ${product.stock} ชิ้น (คุณเลือก ${item.qty})`
+      );
+    }
+  }
+
+  const total = state.cart.reduce(
+   (s,i)=> s + Number(i.price) * Number(i.qty),
+   0
+ );
+
+  const form = new URLSearchParams();
+  form.append("action", "createOrder");
+  form.append("items", JSON.stringify(state.cart));
+  form.append("total", total);
+
+  // ใช้ fetchWithTimeout เพื่อป้องกัน request แขวน
+  const res = await fetchWithTimeout(API_URL, {
+    method: "POST",
+    body: form
+  }, 15000);
+
+  // 🔴 FIX: เช็ค HTTP status ก่อน
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `CreateOrder HTTP ${res.status}: ${text}`
+    );
+  }
+
+  const json = await res.json();
+
+  // 🔴 FIX: validate response shape
+  if (!json || json.success !== true || !json.data?.orderId) {
+    throw new Error("Invalid createOrder response");
+  }
+
+  return json;
+}
+
+function openOverlay(el){
+  if (!el || el.classList.contains("show")) return;
+
+  el.classList.add("show");
+  state.ui.overlayCount++;
+
+  backdrop.style.display = "block";
+}
+
+function closeOverlay(el){
+  if (!el || !el.classList.contains("show")) return;
+
+  el.classList.remove("show");
+  state.ui.overlayCount = Math.max(0, state.ui.overlayCount - 1);
+
+  // 🔴 CHANGED: จำว่าเราปิด "cartSheet" อยู่ไหม (เพราะบางครั้งปิดผ่าน backdrop จะไม่เรียก closeCart)
+  const closedCartSheet = (el.id === "cartSheet");
+
+  if (state.ui.overlayCount === 0 && !state.ui.backdropLocked) {
+    backdrop.style.display = "none";
+
+    // 🔴 FIX: reset floating bar momentum state
+    const bar = document.getElementById("floatingBar");
+    if (bar) bar.classList.remove("scroll-hide");
+
+    // 🔴 CHANGED: ถ้าเพิ่งปิด cartSheet และกลับสู่ viewer จริง → ต้องคืน floatingBar ถ้า cart ยังมีของ
+    // ใช้ rAF เพื่อให้ DOM/overlayCount settle ก่อน (กันเคสปิดแล้ว bar ไม่กลับ)
+    if (closedCartSheet && typeof renderFloatingBar === "function") {
+      requestAnimationFrame(() => {
+        // กันเคส user เปิด overlay อื่นทันทีระหว่างเฟรม
+        if (state.mode === "viewer" && state.ui.overlayCount === 0) {
+          renderFloatingBar();
+        }
+      });
+    }
+  }
+}
+
+async function adminStockIn(productId, qty, reason){
+  if (!state.admin.token) {
+    throw new Error("Not authenticated");
+  }
+
+  const form = new URLSearchParams();
+  form.append("action", "stockIn");
+  form.append("productId", productId);
+  form.append("qty", qty);
+  form.append("reason", reason || "");
+  form.append("token", state.admin.token); // ✅ สำคัญที่สุด
+
+  const res = await fetch(API_URL, {
+    method: "POST",
+    body: form
+  });
+
+  const json = await res.json();
+
+  // 🔒 session หมดอายุ / token ผิด
+  if (json.error || json.success === false) {
+    if (
+      json.error === "Session expired" ||
+      json.error === "Invalid token" ||
+      json.error === "Missing token"
+    ) {
+      alert("Session หมดอายุ กรุณา login ใหม่");
+      exitAdmin();
+    }
+    throw new Error(json.error || "Stock IN failed");
+  }
+
+  return json;
+}
+
+
+async function adminStockAdjust(productId, newQty, reason){
+  if (!state.admin.token) {
+    throw new Error("Not authenticated");
+  }
+
+  const form = new URLSearchParams();
+  form.append("action", "stockAdjust");
+  form.append("productId", productId);
+  form.append("newQty", newQty);
+  form.append("reason", reason || "");
+  form.append("token", state.admin.token); // ✅ สำคัญที่สุด
+
+  const res = await fetch(API_URL, {
+    method: "POST",
+    body: form
+  });
+
+  const json = await res.json();
+
+  // 🔒 session หมดอายุ / token ผิด
+  if (json.error || json.success === false) {
+    if (
+      json.error === "Session expired" ||
+      json.error === "Invalid token" ||
+      json.error === "Missing token"
+    ) {
+      alert("Session หมดอายุ กรุณา login ใหม่");
+      exitAdmin();
+    }
+    throw new Error(json.error || "Stock adjust failed");
+  }
+
+  return json;
+}
+
+  
+
+/* ================= ADMIN API ================= */ // 🔴 ADD
+
+async function adminApproveOrder(orderId) {
+  if (state.admin.isSubmitting) return;
+  state.admin.isSubmitting = true;
+
+  try {
+    if (!state.admin.token) {
+      throw new Error("Not authenticated");
+    }
+
+    showLoading("กำลังอนุมัติคำสั่งซื้อ...");
+
+    const form = new URLSearchParams();
+    form.append("action", "approveOrder");
+    form.append("orderId", orderId);
+    form.append("token", state.admin.token);
+
+    const res = await fetch(API_URL, {
+      method: "POST",
+      body: form
+    });
+
+    const json = await res.json();
+
+    if (json.error || json.success === false) {
+      if (
+        json.error === "Session expired" ||
+        json.error === "Invalid token" ||
+        json.error === "Missing token"
+      ) {
+        showToast("Session หมดอายุ กรุณา login ใหม่", "warning");
+        exitAdmin();
+      }
+      throw new Error(json.error || "Approve order failed");
+    }
+
+    // ✅ success
+    showToast("อนุมัติคำสั่งซื้อสำเร็จ", "success");
+    return json.data;
+
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || "ไม่สามารถอนุมัติคำสั่งซื้อได้", "error");
+    throw err;
+  } finally {
+  safeHideLoading();
+  state.admin.isSubmitting = false;
+ }
+}
+
+async function adminRejectOrder(orderId) {
+  if (state.admin.isSubmitting) return;
+  state.admin.isSubmitting = true;
+
+  try {
+    if (!state.admin.token) {
+      throw new Error("Not authenticated");
+    }
+
+    showLoading("กำลังปฏิเสธคำสั่งซื้อ...");
+
+    const form = new URLSearchParams();
+    form.append("action", "rejectOrder");
+    form.append("orderId", orderId);
+    form.append("token", state.admin.token);
+
+    const res = await fetch(API_URL, {
+      method: "POST",
+      body: form
+    });
+
+    const json = await res.json();
+
+    if (json.error || json.success === false) {
+      if (
+        json.error === "Session expired" ||
+        json.error === "Invalid token" ||
+        json.error === "Missing token"
+      ) {
+        showToast("Session หมดอายุ กรุณา login ใหม่", "warning");
+        exitAdmin();
+      }
+      throw new Error(json.error || "Reject order failed");
+    }
+
+    // ✅ success
+    showToast("ปฏิเสธคำสั่งซื้อเรียบร้อย", "success");
+    return json.data;
+
+  } catch (err) {
+    console.error(err);
+    showToast(
+      err.message || "ไม่สามารถปฏิเสธคำสั่งซื้อได้",
+      "error"
+    );
+    throw err;
+
+  } finally {
+    // ✅ cleanup ถูกต้อง
+    safeHideLoading();
+    state.admin.isSubmitting = false;
+  }
+}
+
+async function fetchStockLogs() {
+  if (!state.admin.token) {
+    throw new Error("Not authenticated");
+  }
+
+  const form = new URLSearchParams();
+  form.append("action", "stockLogs");
+  form.append("token", state.admin.token);
+
+  const res = await fetch(API_URL, {
+    method: "POST",
+    body: form
+  });
+
+  const json = await res.json();
+
+  if (json.error || json.success === false) {
+    if (
+      json.error === "Session expired" ||
+      json.error === "Invalid token" ||
+      json.error === "Missing token"
+    ) {
+      alert("Session หมดอายุ กรุณา login ใหม่");
+      exitAdmin();
+    }
+
+    throw new Error(json.error || "โหลด Stock Logs ไม่สำเร็จ");
+  }
+
+  return json;
+}
+
+
+  
+
+async function fetchOrders(){
+  if (!state.admin.token) {
+    throw new Error("Not authenticated");
+  }
+
+  const form = new URLSearchParams();
+  form.append("action", "orders");
+  form.append("token", state.admin.token);
+
+  const res = await fetch(API_URL, {
+    method: "POST",
+    body: form
+  });
+
+  const json = await res.json();
+
+  if (!json.success) {
+    // 🔒 token หมดอายุ / ไม่ถูกต้อง
+    if (
+      json.error === "Session expired" ||
+      json.error === "Invalid token"
+    ) {
+      alert("Session หมดอายุ กรุณา login ใหม่");
+      exitAdmin(); // logout ฝั่ง frontend
+    }
+    throw new Error(json.error || "โหลด Orders ไม่สำเร็จ");
+  }
+
+  // ✅ คืน array ของ orders
+  return json.data;
+}
+  
+/* ================= STOCK CHECK ================= */
+async function checkStockBeforeSubmit() {
+  const latestProducts = await fetchProducts();
+
+  for (const item of state.cart) {
+    const product = latestProducts.find(
+      p => p.productId === item.productId
+    );
+
+    if (!product) {
+      return { ok:false, message:`ไม่พบสินค้า ${item.name}` };
+    }
+
+    if (Number(product.stock) < Number(item.qty)) {
+      return {
+        ok:false,
+        message:`${item.name} คงเหลือ ${product.stock} ชิ้น (คุณเลือก ${item.qty})`
+      };
+    }
+  }
+
+  return { ok:true };
+}
+
+/* ================= RENDER FUNCTIONS ================= */
+// 🔒 Global HTML Escape (XSS Guard) — micro polish: escape &, <, >, ", '
+ const esc = (s) =>
+   String(s ?? "")
+     .replace(/&/g, "&amp;")
+     .replace(/</g, "&lt;")
+     .replace(/>/g, "&gt;")
+     .replace(/"/g, "&quot;")
+     .replace(/'/g, "&#39;");
+
+ // 🔒 Attribute-safe (สำหรับ src/alt/href)
+ const escAttr = (s) => esc(s);
+
+
+// 🔴 CHANGED: ADD renderFloatingBar() (fix: cart added but bar never appears because function was missing)
+function renderFloatingBar(){
+  const bar = document.getElementById("floatingBar");
+  if (!bar) return;
+
+  // show เฉพาะ viewer + มีของในตะกร้า
+  const hasItems = Array.isArray(state.cart) && state.cart.length > 0;
+   const isViewer = state.mode === "viewer";
+
+  // ✅ FIX: กัน ReferenceError ถ้าไม่มีตัวแปร cartSheet (หาจาก DOM โดยตรง)
+  const cartSheetEl = document.getElementById("cartSheet");
+  const cartOpen = !!(cartSheetEl && cartSheetEl.classList.contains("show"));
+
+  if (!isViewer || !hasItems || cartOpen) {
+    bar.classList.remove("show","bounce-in");
+    bar.innerHTML = "";
+    return;
+  }
+
+  const total = state.cart.reduce((s,i)=> s + (Number(i.price)||0) * (Number(i.qty)||0), 0);
+  const money = (n) => (Number(n)||0).toLocaleString("th-TH");
+
+  // ✅ แสดงเป็น "รายการ" (ชื่อสินค้าแบบย่อ) ไม่โชว์จำนวน
+  const names = state.cart
+    .map(i => String(i.name || "").trim())
+    .filter(Boolean);
+  const uniqueNames = [...new Set(names)];
+  const itemCount = uniqueNames.length; // ✅ จำนวน "รายการ" (distinct) เช่น qty=3 ก็ยัง = 1 รายการ
+  const preview = uniqueNames.slice(0, 2).join(", ");
+  const more = uniqueNames.length - 2;
+  const listText = itemCount
+    ? `${itemCount} รายการ: ${preview}${more > 0 ? ` +อีก ${more} รายการ` : ""}`
+    : "0 รายการ";
+  
+  bar.innerHTML = `
+    <div class="bar-left" style="width:100%;">
+      <div style="font-weight:700">ตะกร้า</div>
+      <div class="bar-subtext">
+        ${listText} • รวม ฿${money(total)}
+      </div>
+    </div>
+  `;
+
+// 🔴 NEW: ทั้งแถบกดเพื่อเปิดตะกร้า
+bar.onclick = openCart;
+bar.style.cursor = "pointer";
+
+  // ให้โชว์แน่นอน + กันโดน scroll-hide ค้าง
+  bar.classList.remove("scroll-hide");
+  bar.classList.add("show","bounce-in");
+  setTimeout(()=> bar.classList.remove("bounce-in"), 650);
+}  
+  
+function openImageViewer(url){
+  if (!url) return;
+
+  const sheet = document.getElementById("imageViewerSheet");
+  if (!sheet) return;
+
+  // reset state
+  sheet.classList.add("image-viewer-fullscreen");
+
+  sheet.innerHTML = `
+    <!-- overlay background -->
+    <div class="image-viewer-bg" onclick="closeImageViewer(event)"></div>
+
+    <!-- close button -->
+    <button
+      class="close-btn image-viewer-close"
+      onclick="closeImageViewer(event)">
+      ×
+    </button>
+
+    <!-- product image -->
+    <img
+      src="${escAttr(url)}"
+      alt="preview"
+      class="image-viewer-img"
+    >
+  `;
+
+  openOverlay(sheet);
+}
+
+function closeImageViewer(ev){
+  if (ev) ev.stopPropagation();
+
+  const sheet = document.getElementById("imageViewerSheet");
+  if (!sheet) return;
+
+  sheet.innerHTML = "";
+  sheet.classList.remove("image-viewer-fullscreen");
+
+  if (sheet.classList.contains("show")) {
+    closeOverlay(sheet);
+  }
+}
+ 
+ function openProductInfoSheet(p){
+   const details = p.detailsText
+     ? p.detailsText.split("\n").filter(Boolean)
+     : [];
+
+   const images = p.compareImages
+     ? p.compareImages.split(",").map(s => s.trim())
+     : [];
+
+   const html = `
+     <h3>${esc(p.name)}</h3>
+
+     ${
+       images.length
+         ? `
+           <div class="product-info-images">
+ ${images.map((url) => {
+   // ✅ embed JS arg safely + keep src attribute safe
+   const jsArg = JSON.stringify(String(url ?? ""));
+   return `
+<img src="${escAttr(url)}"
+     class="product-info-zoom"
+     onclick='openImageViewer(${jsArg})'>
+   `;
+ }).join("")}
+           </div>
+         `
+         : ""
+     }
+
+     ${
+       details.length
+         ? `
+           <div class="product-info-block">
+             <ul>
+               ${details.map(d => `<li>${esc(d)}</li>`).join("")}
+             </ul>
+           </div>
+         `
+         : ""
+     }
+
+<button class="btn btn-secondary product-info-close-btn"
+   onclick="closeProductInfoSheet()">
+   ปิด
+ </button>
+   `;
+
+ let sheet = document.getElementById("productInfoSheet");
+ if (!sheet) {
+   sheet = document.createElement("div");
+   sheet.id = "productInfoSheet";
+   sheet.className = "sheet";
+   document.body.appendChild(sheet);
+ }
+ sheet.innerHTML = html;
+ openOverlay(sheet);
+ }
+
+function closeProductInfoSheet(){
+  const sheet = document.getElementById("productInfoSheet");
+  if (sheet && sheet.classList.contains("show")) {
+    closeOverlay(sheet);
+  }
+}  
+  
+function renderProducts(){
+  const app = document.getElementById("app");
+
+  const escapeHTML = (str="") =>
+    String(str ?? "")
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#39;");
+  
+  // 🔒 GUARD สำคัญที่สุด
+  if (!Array.isArray(state.products)) {
+    console.error("renderProducts: products is not array", state.products);
+    app.innerHTML = `
+      <div style="
+        text-align:center;
+        color:#d93025;
+        margin-top:40px;
+        font-size:15px;
+      ">
+        ไม่สามารถโหลดรายการสินค้าได้
+      </div>
+    `;
+    return;
+  }
+
+  app.innerHTML = "";
+  let found = false;
+
+  state.products.forEach(p => {
+    const stockNum = Number(p.stock);
+
+  // 🔍 STATUS RESOLVE (ต้องมาก่อน filter ทุกครั้ง)
+    const resolvedStatus =
+      stockNum <= 0
+        ? "out"
+        : String(p.status || "ready").trim().toLowerCase();  
+
+    // ❌ ไม่แสดงสินค้าที่ปิดขาย (viewer เท่านั้น)
+    if (state.mode === "viewer" && !p.active) return;
+
+    // 🔍 SEARCH FILTER (ชื่อ + รหัส)
+    if (state.search) {
+      const text = (p.name + p.productId).toLowerCase();
+      if (!text.includes(String(state.search).toLowerCase())) return;
+    }
+
+// 🔍 STATUS FILTER (Viewer/Admin use resolved status)
+if (
+  state.mode === "viewer" &&
+  state.viewerFilter &&
+  state.viewerFilter.status !== "all"
+) {
+  if (resolvedStatus !== state.viewerFilter.status) return;
+}
+
+// 🔴 CHANGED: admin filter (ต้องอยู่หลัง resolvedStatus เสมอ)
+    if (
+      state.mode === "admin" &&
+      state.adminFilter &&
+      state.adminFilter.status !== "all"
+    ) {
+      if (resolvedStatus !== state.adminFilter.status) return;
+    }    
+    
+/* ================= STATUS LOGIC ================= */
+const statusMap = {
+  ready:     "พร้อมส่ง",
+  shipping:  "อยู่ระหว่างจัดส่ง",
+  warehouse: "อยู่โกดังไทย",
+  out:       "หมด"
+};
+
+const statusKey = resolvedStatus;
+let statusClass = statusKey;
+let statusText  = statusMap[statusKey] || "พร้อมส่ง";
+
+    /* ================= CARD ================= */
+    const card = document.createElement("div");
+    card.className = "product-card";
+
+    card.onclick = () => {
+      if (state.mode === "admin") {
+        openAdminProductAction(p);
+      } else {
+        openProduct(p);
+      }
+    };
+
+    card.innerHTML = `
+      <img class="thumb"
+        src="${p.image ? escapeHTML(p.image) : "about:blank"}"
+        alt="${escapeHTML(p.name)}"
+        onerror="this.style.display='none'">
+
+      <div class="info">
+        <div class="name">${escapeHTML(p.name)}</div>
+        <div class="sku">รหัส: ${escapeHTML(p.productId)}</div>
+        <div class="price">ราคา: ฿${Number(p.price).toLocaleString()}</div>
+
+        <div class="meta">
+          <span class="qty">จำนวน: ${p.stock}</span>
+          <span class="status ${statusClass}">
+            ${statusText}
+          </span>
+        </div>
+      </div>
+    `;
+
+    app.appendChild(card);
+    found = true;
+  });
+
+  // ❌ ไม่พบสินค้า
+  if (!found) {
+    app.innerHTML = `
+      <div style="
+        text-align:center;
+        color:#888;
+        margin-top:40px;
+        font-size:15px;
+      ">
+        ไม่พบสินค้าที่ค้นหา
+      </div>
+    `;
+  }
+}
+
+function renderProductSheet(){
+  const p = state.selectedProduct;
+  if (!productSheet || !p) return;
+
+  productSheet.innerHTML = `
+    <!-- ❌ CLOSE BUTTON (TOP-RIGHT) -->
+ <button
+   class="sheet-close sheet-close-btn"
+   onclick="closeOverlay(window.productSheet)"
+   aria-label="Close"
+ >
+      ×
+    </button>
+
+    <h3 class="product-title">${esc(p.name)}</h3>
+
+    <div class="product-sku">
+      รหัสสินค้า: ${esc(p.productId)}
+    </div>
+
+    <!-- ✅ FIX IMAGE -->
+ <img 
+   src="${escAttr(p.image || '')}"
+   alt="${escAttr(p.name)}"
+   class="product-image product-info-zoom"
+   onclick='openImageViewer(${JSON.stringify(String(p.image || ""))})'
+ >
+
+    <div class="price">฿${p.price}</div>
+    <div class="stock">คงเหลือ ${p.stock} ชิ้น</div>
+    
+     ${
+      p.detailsText || p.compareImages
+        ? `
+          <button
+            class="btn btn-outline product-detail-btn"
+            onclick="openProductInfoSheet(state.selectedProduct)">
+            รายละเอียดสินค้า
+          </button>
+        `
+        : ""
+    }
+
+     ${
+   p.note
+     ? `
+<div class="product-note">
+         📝 ${String(p.note)
+       .replace(/</g, "&lt;")
+       .replace(/>/g, "&gt;")}
+       </div>
+     `
+     : ""
+ }
+
+    ${
+      state.mode === "viewer"
+        ? `
+          <!-- 🔹 ACTION ZONE -->
+<div class="product-action-zone">
+            <button
+              class="btn btn-primary"
+              onclick="openQtySheet()"
+            >
+              เพิ่มลงตะกร้า
+            </button>
+          </div>
+        `
+        : `
+ <div class="product-admin-hint">
+   🔧 โหมดแอดมิน
+ </div>
+        `
+    }
+  `;
+}
+  
+function renderCart(){
+  cartSheet.innerHTML="<h3>ตะกร้า</h3>";
+
+  if(state.cart.length===0){
+    cartSheet.innerHTML+=`<div style="color:#888">ยังไม่มีสินค้าในตะกร้า</div>
+`;
+    return;
+  }
+
+  state.cart.forEach((i,idx)=>{
+  cartSheet.innerHTML+=`
+    <div class="cart-item">
+      <div>
+        <div class="name">${esc(i.name)}</div>
+        <div style="font-size:12px;color:#888">
+          รหัส: ${i.productId}
+        </div>
+        <div class="price">฿${i.price}</div>
+      </div>
+ <div class="cart-item-right">
+   <div style="font-size:14px;color:#555">
+     จำนวน: ${i.qty || 1}
+   </div>
+   <button class="btn-remove"
+     onclick="removeItem(${idx})">
+     ลบ
+   </button>
+ </div>
+    </div>`;
+  });
+
+const total = state.cart.reduce(
+   (s,i)=> s + Number(i.price) * Number(i.qty),
+   0
+ );
+
+cartSheet.innerHTML += `
+  <div class="total">Total: ฿${total}</div>
+  <button class="btn btn-primary"
+    onclick="openConfirm()">
+    สร้างใบสั่งซื้อ
+  </button>
+`;
+}
+
+function renderBadge(){
+  const cartButton = document.getElementById("cartButton");
+  const cartBadge  = document.getElementById("cartBadge");
+
+  // 🔴 CHANGED: allow floating bar to sync even if header cart button removed
+  if (cartButton && cartBadge) {
+    const count = state.cart.length;
+
+    if (count > 0) {
+      cartButton.style.display = "block";
+      cartBadge.textContent = count;
+    } else {
+      cartButton.style.display = "none";
+    }
+  }
+  
+  // 🔴 NEW: sync floating bar ทุกครั้งที่ badge update
+  renderFloatingBar();
+}
+ 
+function renderConfirmSheet(){
+  const confirmSheet = document.getElementById("confirmSheet");
+  if (!confirmSheet) return;
+  let total = 0;
+
+  confirmSheet.innerHTML = "<h3>ยืนยันใบสั่งซื้อ</h3>";
+
+  state.cart.forEach(i=>{
+    const sum = i.price * i.qty;
+    total += sum;
+
+    confirmSheet.innerHTML += `
+      <div class="cart-item">
+        <div>
+          <div class="name">${esc(i.name)}</div>
+          <div style="font-size:12px;color:#888">รหัส: ${i.productId}</div>
+          <div style="font-size:13px">จำนวน ${i.qty}</div>
+        </div>
+        <div>฿${sum}</div>
+      </div>
+    `;
+  });
+
+  confirmSheet.innerHTML += `
+    <div class="total">ยอดรวม: ฿${total}</div>
+
+    <div class="form-group" style="margin-top:12px">
+     <label>เลข PO (ถ้ามี)</label>
+     <input
+       id="poInput"
+       placeholder="กรอกเลข PO"
+       oninput="state.poNumber = this.value.trim()">
+   </div>
+
+
+<button class="btn btn-primary"
+  id="submitBtn"
+  ${state.isSubmitting ? "disabled" : ""}
+  onclick="submitOrder()">
+  ยืนยันสร้างใบสั่งซื้อ
+</button>
+  `;
+ 
+}
+
+/* ================= HEADER RENDER (UPGRADED) ================= */
+
+function renderHeader(){
+  const h = document.getElementById("appHeader");
+  if(!h) return;
+
+  if(state.mode === "viewer"){
+    h.innerHTML = `
+      <div class="header-left">
+      <div class="header-stack">
+        <div class="shop-title">ร้านค้า Luopanich</div>
+        <div class="shop-subtitle">ค้นหา · กรองสถานะ · เพิ่มลงตะกร้า</div>
+
+        <!-- 🔍 SEARCH ICON + EXPAND -->
+<div
+   id="viewerSearchWrap"
+   class="search-wrap viewer-search-wrap"
+ >
+          <button
+            onclick="toggleViewerSearch()"
+            class="search-btn"
+          >
+            <svg class="icon-sf" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="6"></circle>
+              <path d="M20 20l-3.2-3.2"></path>
+            </svg>
+          </button>
+
+          <input
+            id="viewerSearchInput"
+            placeholder="ค้นหาสินค้า / รหัส"
+            oninput="handleSearch(this.value)"
+            onfocus="focusInput(this)"
+            class="search-input"
+          >
+        </div>          
+         </div>
+    </div>
+
+<div class="header-actions">
+
+   <div class="filter-wrap">
+     <button class="filter-btn"
+        onclick="toggleFilterDropdown()"
+        aria-label="Filter">
+        <!-- iOS-like: line.3.horizontal.decrease (stroke, SF-style) -->
+        <svg class="icon-sf" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 7h16"></path>
+          <path d="M7 12h10"></path>
+          <path d="M10 17h4"></path>
+        </svg>
+     </button>
+
+     <div id="filterDropdown" class="filter-dropdown">
+       <div class="filter-item" onclick="selectFilter('all')">ทั้งหมด</div>
+       <div class="filter-item" onclick="selectFilter('ready')">พร้อมส่ง</div>
+       <div class="filter-item" onclick="selectFilter('shipping')">ระหว่างจัดส่ง</div>
+       <div class="filter-item" onclick="selectFilter('warehouse')">โกดังไทย</div>
+       <div class="filter-item" onclick="selectFilter('out')">หมด</div>
+     </div>
+   </div>
+      
+ <button
+   class="menu-btn"
+   onclick="openMainMenu()"
+   aria-label="Main Menu">
+   <svg class="icon-sf" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+     <path d="M4 7h16"></path>
+     <path d="M4 12h16"></path>
+     <path d="M4 17h16"></path>
+   </svg>
+ </button>
+
+   </div>   
+    `;
+  }
+
+ if(state.mode === "admin"){
+  h.innerHTML = `
+    <div class="header-left">
+      <div class="header-stack">
+        <div class="admin-title">
+          การจัดการสินค้า
+          <span class="badge" style="margin-left:8px;">ADMIN</span>
+          <!-- 🔴 CHANGED: เพิ่ม Mode Indicator (badge) ให้ชัด -->
+        </div>
+        <div class="shop-subtitle">Admin · แก้ไข · ปรับสต๊อก · ตรวจออเดอร์</div>
+      </div>
+
+      <!-- 🔍 SEARCH (ICON EXPAND LIKE VIEWER) -->
+      <div class="search-wrap" id="adminSearchWrap">
+        <button
+          class="search-btn"
+          onclick="toggleAdminSearch()"
+          aria-label="Search">
+          <svg class="icon-sf" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="11" cy="11" r="6"></circle>
+            <path d="M20 20l-3.2-3.2"></path>
+          </svg>
+        </button>
+        <input
+          class="search-input"
+          placeholder="ค้นหาสินค้า / รหัส"
+          oninput="handleSearch(this.value)"
+        />
+      </div>
+    </div>
+  
+    <!-- 🔴 CHANGED: Admin ใช้ filter + menu เหมือน Viewer -->
+    <div class="header-actions">
+
+      <div class="filter-wrap">
+        <button class="filter-btn"
+          onclick="toggleFilterDropdown()"
+          aria-label="Filter">
+          <svg class="icon-sf" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 7h16"></path>
+            <path d="M7 12h10"></path>
+            <path d="M10 17h4"></path>
+          </svg>
+        </button>
+
+        <div id="filterDropdown" class="filter-dropdown">
+          <div class="filter-item" onclick="selectFilter('all')">ทั้งหมด</div>
+          <div class="filter-item" onclick="selectFilter('ready')">พร้อมส่ง</div>
+          <div class="filter-item" onclick="selectFilter('shipping')">ระหว่างจัดส่ง</div>
+          <div class="filter-item" onclick="selectFilter('warehouse')">โกดังไทย</div>
+          <div class="filter-item" onclick="selectFilter('out')">หมด</div>
+        </div>
+      </div>
+
+      <button
+        class="menu-btn"
+        onclick="openMainMenu()"
+        aria-label="Open Main Menu">
+        <svg class="icon-sf" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 7h16"></path>
+          <path d="M4 12h16"></path>
+          <path d="M4 17h16"></path>
+        </svg>
+      </button>
+
+    </div>
+  `;
+}
+
+} // ✅ ปิด renderHeader()
+  
+/* 🔍 viewer search toggle (เฉพาะ UI) */
+function toggleViewerSearch(){
+  const wrap  = document.getElementById("viewerSearchWrap");
+  const input = document.getElementById("viewerSearchInput");
+  if(!wrap || !input) return;
+
+  const opened = wrap.classList.contains("active");
+
+  if(opened){
+    input.value = "";
+    state.search = "";
+    state.viewerSearchOpen = false;
+    renderProducts();
+    wrap.classList.remove("active");
+  }else{
+    state.viewerSearchOpen = true;
+    wrap.classList.add("active");
+    setTimeout(()=>input.focus(),80);
+  }
+}
+
+/* 🔍 admin search toggle (ICON EXPAND) */
+
+function toggleAdminSearch(){
+  const wrap = document.getElementById("adminSearchWrap");
+  if (!wrap) return;
+
+  const opening = !wrap.classList.contains("active");
+
+  wrap.classList.toggle("active");
+
+  if (opening) {
+    const input = wrap.querySelector("input");
+    // 🕒 รอ animation เริ่มก่อน focus (iOS trick)
+    setTimeout(() => input && input.focus(), 120);
+  }
+}
+  
+function handleSearch(keyword){
+  state.search = keyword.toLowerCase();
+  renderProducts();
+}
+
+// ================= VIEWER + ADMIN FILTER =================
+
+function setViewerStatus(status){
+  // 🔒 guard: ใช้เฉพาะ viewer mode
+  if(state.mode !== "viewer") return;
+
+  // 🔒 guard: ป้องกันค่า undefined
+  if(!status) return;
+
+  state.viewerFilter.status = status;
+
+  // 🔄 sync UI pill
+  renderHeader();
+
+  // 🔄 re-filter product list
+  renderProducts();
+}
+
+// 🔴 CHANGED: เพิ่ม admin version (รูปแบบเดียวกับ viewer)
+function setAdminStatus(status){
+  // 🔒 guard: ใช้เฉพาะ admin mode
+  if(state.mode !== "admin") return;
+
+  if(!status) return;
+
+  state.adminFilter.status = status;
+
+  renderHeader();
+  renderProducts();
+}
+
+function toggleFilterDropdown(){
+  const el = document.getElementById("filterDropdown");
+  if(!el) return;
+
+  const isOpen = el.classList.contains("show");
+
+  document.querySelectorAll(".filter-dropdown.show")
+    .forEach(d => d.classList.remove("show"));
+
+  if(!isOpen){
+    el.classList.add("show");
+
+    // 🔴 auto close on outside click
+    setTimeout(()=>{
+      document.addEventListener("click", closeFilterOnOutside, { once:true });
+    }, 0);
+  }
+}
+
+function closeFilterOnOutside(e){
+  const wrap = document.querySelector(".filter-wrap");
+  if(!wrap || wrap.contains(e.target)) return;
+
+  const el = document.getElementById("filterDropdown");
+  if(el) el.classList.remove("show");
+}
+
+// 🔴 CHANGED: route ตาม mode แทนการ fix viewer อย่างเดียว
+function selectFilter(status){
+  if (state.mode === "admin") {
+    setAdminStatus(status);
+  } else {
+    setViewerStatus(status);
+  }
+
+  const el = document.getElementById("filterDropdown");
+  if(el) el.classList.remove("show");
+}  
+  
+function openAdminEntry(){
+  // 🔒 ถ้ามี session อยู่แล้ว → ต้อง valid ก่อนค่อยเข้า admin
+  if (state.admin.loggedIn && state.admin.token) {
+    if (isAdminSessionExpired()) {
+      alert("Session หมดอายุ กรุณา login ใหม่");
+      clearAdminSession();
+      state.admin.loggedIn = false;
+      state.admin.user = null;
+      state.admin.token = null;
+      state.admin.expiredAt = null;
+    } else {
+      enterAdmin();
+      return;
+    }
+  }
+
+  // 🔓 ยังไม่ login → แสดงหน้า login
+  renderAdminLogin();
+}
+
+function enterAdmin(){
+  state.mode = "admin";
+  state.search = ""; // ✅ reset
+  state.viewerSearchOpen = false;
+  renderHeader();
+  renderProducts();
+}
+
+// ✅ STEP 1: UI-only mode switch (ไม่ยุ่ง session/token)
+function leaveAdminMode(){
+  // 🔒 ปิด overlay ทั้งหมดแบบเดิม (UI layer)
+  document
+    .querySelectorAll(".sheet.show, .side-menu.show")
+    .forEach(el => closeOverlay(el));
+
+  // กัน intent เด้งซ้ำ (UI guard)
+  allowOpenOrders = false;
+  allowOpenStockTimeline = false;
+  allowOpenAddProduct = false;
+
+  // ✅ กลับสู่ viewer mode (UI state only)
+  state.mode = "viewer";
+  state.search = "";
+  state.viewerSearchOpen = false;
+
+  renderHeader();
+  renderProducts();
+  if (typeof renderBadge === "function") renderBadge();
+}
+
+function exitAdmin(){
+  // 🔒 ปิดทุก overlay ผ่าน Overlay Manager (สำคัญที่สุด)
+  document
+    .querySelectorAll(".sheet.show, .side-menu.show")
+    .forEach(el => {
+      closeOverlay(el); // ✅ หัวใจ
+    });
+
+  // ❌ กัน Orders เด้งซ้ำ
+  allowOpenOrders = false;
+  allowOpenStockTimeline = false;
+  allowOpenAddProduct = false;
+
+  // 🧹 CLEAR PERSIST SESSION  ← 🔴 เพิ่มบรรทัดเดียว
+  clearAdminSession();
+
+  // 🔄 reset admin state
+  state.mode = "viewer";
+  state.admin.loggedIn = false;
+  state.admin.user = null;
+  state.admin.token = null;
+  state.admin.orders = [];
+  state.admin.selectedOrder = null;
+  state.admin.logs = [];
+
+  // 🔍 reset search
+  state.search = "";
+
+  // 🔄 render viewer ใหม่แบบ clean
+  renderHeader();
+  renderProducts();
+  if (typeof renderBadge === "function") renderBadge();
+}
+
+function handleBackdropClick(){
+  if (state.ui.backdropLocked) {
+
+    console.warn('[Backdrop] force unlock');
+
+   // 🔴 FIX: force reset overlay system (emergency exit)
+   state.ui.backdropLocked = false;
+   const openEls = document.querySelectorAll(".sheet.show, .side-menu.show");
+   openEls.forEach(el => el.classList.remove("show"));
+   state.ui.overlayCount = 0;
+
+    safeHideLoading();   // ✅ ไม่มีทาง error
+    showToast("ยกเลิกการดำเนินการ", "warning", 1200);
+    return;
+  }
+
+  closeTopSheet();
+}
+
+function closeTopSheet(){
+  const sheets = [
+    // 🔴 ADMIN FLOW (top → bottom)
+    document.getElementById("imageViewerSheet"),
+    document.getElementById("productInfoSheet"),
+    document.getElementById("mainMenuSheet"),           // main menu (side)
+    document.getElementById("adminProductActionSheet"),
+    document.getElementById("adminProductEditSheet"),
+    document.getElementById("adminStockActionSheet"),
+    document.getElementById("adminOrderSheet"),
+    document.getElementById("adminDashboardSheet"),
+    document.getElementById("adminStockSheet"),
+
+    // 🔵 VIEWER FLOW
+    document.getElementById("confirmSheet"),
+    document.getElementById("cartSheet"),
+    document.getElementById("qtySheet"),
+    document.getElementById("productSheet"),
+    document.getElementById("stockSheet")
+  ];
+
+  for (const sheet of sheets) {
+    if (sheet && sheet.classList.contains("show")) {
+      // ✅ ใช้ Overlay Manager เท่านั้น
+      closeOverlay(sheet);
+      break;
+    }
+  }
+}
+ 
+
+function showStockError(message){
+  stockSheet.innerHTML = `
+    <h3 style="color:#ff3b30">สต๊อกไม่เพียงพอ</h3>
+
+    <div style="
+      font-size:15px;
+      color:#333;
+      line-height:1.5;
+      margin-top:8px
+    ">
+      ${message}
+    </div>
+
+    <button class="btn btn-primary"
+      style="width:100%;margin-top:16px"
+      onclick="closeStockError()">
+      ตกลง
+    </button>
+  `;
+
+  // ✅ เปิดผ่าน Overlay Manager เท่านั้น
+  openOverlay(stockSheet);
+}
+
+
+function closeStockError(){
+  closeOverlay(stockSheet);
+  openOverlay(confirmSheet);
+}
+  
+function openConfirm(){
+  if (state.cart.length === 0) return;
+
+  state.ui.backdropLocked = true; // 🔒 ล็อก backdrop ระหว่าง confirm
+
+  // ปิด cart ก่อน
+  closeOverlay(cartSheet);
+
+  // render เนื้อหา
+  renderConfirmSheet();
+
+  // ปุ่มยกเลิก
+  confirmSheet.innerHTML += `
+    <button class="btn btn-secondary"
+      style="width:100%;margin-top:8px"
+      onclick="cancelConfirm()">
+      ยกเลิก
+    </button>
+  `;
+
+  // 🔥 หัวใจ: ต้องเปิด sheet จริง
+  openOverlay(confirmSheet);
+}
+
+  
+function cancelConfirm(){
+  state.ui.backdropLocked = false;
+  closeOverlay(confirmSheet);
+  openOverlay(cartSheet);
+}
+
+function closeQty(){
+  closeOverlay(qtySheet);
+}
+
+function openQtySheet(){
+  // 🔒 GUARD: ห้ามเลือกจำนวนถ้า stock = 0
+  if (!state.selectedProduct || Number(state.selectedProduct.stock) <= 0) {
+    showToast("สินค้านี้หมดสต๊อก", "error");
+    return;
+  }
+
+  // 🔒 ปิด product sheet ผ่าน overlay manager
+  closeOverlay(productSheet);
+
+  qtySheet.innerHTML = `
+    <h3>ระบุจำนวน</h3>
+
+    <div class="form-group">
+      <label>จำนวนที่ต้องการ</label>
+      <div class="qty-input">
+        <input
+          type="number"
+          min="1"
+          max="${state.selectedProduct.stock}"
+          value="1"
+          oninput="state.qty = Number(this.value) || 1">
+      </div>
+    </div>
+
+    <div class="qty-action">
+      <button
+        class="btn btn-primary"
+        onclick="confirmAddToCart()">
+        ยืนยันจำนวน
+      </button>
+    </div>
+  `;
+
+  // ✅ เปิดผ่าน Overlay Manager เท่านั้น
+  openOverlay(qtySheet);
+
+  showToast("เลือกระบุจำนวนสินค้า", "info", 1500);
+
+  setTimeout(() => {
+    const input = qtySheet.querySelector("input");
+    if (input) {
+      input.focus();
+      focusInput(input);
+    }
+  }, 100);
+}
+
+  
+function confirmAddToCart(){
+  const p = state.selectedProduct;
+  if (!p) return;
+
+  const qty = Number(state.qty) || 1;
+
+  // 🔒 GUARD: ห้ามเกิน stock
+  const existing = state.cart.find(i => i.productId === p.productId);
+  const currentQty = existing ? existing.qty : 0;
+
+  if (currentQty + qty > Number(p.stock)) {
+    // ❌ เดิม: alert
+    // alert(`สินค้า "${p.name}" มีคงเหลือ ${p.stock} ชิ้น`);
+
+    // ✅ ใหม่: toast warning
+    showToast(
+      `สินค้า "${p.name}" คงเหลือ ${p.stock} ชิ้น`,
+      "warning"
+    );
+    return;
+  }
+
+  if(existing){
+    existing.qty += qty;
+  }else{
+    state.cart.push({
+      productId: p.productId,
+      name: p.name,
+      price: p.price,
+      qty: qty
+    });
+  }
+
+  if (typeof renderBadge === "function") renderBadge();
+  saveCart();
+  // 🔴 CHANGED: ให้ floating cart bar อัปเดตทันทีหลังเพิ่มตะกร้า
+  if (typeof renderFloatingBar === "function") renderFloatingBar();
+
+  // ✅ Feedback สำเร็จ (หัวใจของ STEP 2️⃣)
+  showToast(
+    `เพิ่ม "${p.name}" ลงตะกร้าแล้ว`,
+    "success"
+  );
+
+  resetToHome();
+}
+  
+function resetToHome(){
+  hardResetUI();
+}
+
+function hardResetUI({ refresh = false } = {}){
+  // 🔒 ปิดทุก overlay ผ่าน Overlay Manager เท่านั้น
+  document.querySelectorAll(".sheet.show, .side-menu.show")
+    .forEach(el => {
+      closeOverlay(el);
+    });
+
+// 🔓 reset backdrop lock
+state.ui.backdropLocked = false;
+// 🔴 CHANGED: reset UI แล้วต้อง sync floating bar ตาม cart ปัจจุบัน
+if (typeof renderFloatingBar === "function") renderFloatingBar();  
+
+  // 🔄 reset state
+  state.selectedProduct = null;
+  state.qty = 1;
+
+  // 🔄 optional refresh
+  if (refresh) {
+    renderProducts();
+  }
+}
+
+
+function renderAdminLogin(){
+  adminLoginSheet.innerHTML = `
+    <h3>Admin Login</h3>
+
+    <div class="form-group">
+      <input id="adminUser"
+        placeholder="Username"
+        onfocus="focusInput(this)">
+    </div>
+
+    <div class="form-group">
+      <input id="adminPass"
+        type="password"
+        placeholder="Password"
+        onfocus="focusInput(this)">
+    </div>
+
+    <button class="btn btn-primary"
+      id="adminLoginBtn"
+      style="width:100%;margin-top:12px"
+      onclick="handleAdminLogin(this)">
+      Login
+    </button>
+
+    <button class="btn btn-outline"
+      id="adminCancelBtn"
+      style="width:100%;margin-top:8px"
+      onclick="cancelAdminLogin()">
+      ยกเลิก
+    </button>
+  `;
+
+  // อนุญาตให้กด backdrop ปิดได้
+  state.ui.backdropLocked = false;
+
+  openOverlay(adminLoginSheet);
+}
+
+// 🔒 RATE LIMIT STUB (กัน ReferenceError)
+function isLoginRateLimited() {
+  return false;
+}
+  
+
+async function handleAdminLogin(btn){
+  // 🔒 กันกดซ้ำ
+  if (state.isSubmitting) return;
+
+  // 🔒 force global rate limit (scope-safe)
+  if (typeof window.isLoginRateLimited === "function") {
+    if (window.isLoginRateLimited()) {
+      alert("พยายามเข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่");
+      return;
+    }
+  }
+
+  const userInput = document.getElementById("adminUser");
+  const passInput = document.getElementById("adminPass");
+  const cancelBtn = document.getElementById("adminCancelBtn");
+
+  const username = userInput.value.trim();
+  const password = passInput.value;
+
+  if (!username || !password) {
+    alert("กรุณากรอก Username และ Password");
+    return;
+  }
+
+  // ================= UX START =================
+  state.isSubmitting = true;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "กำลังเข้าสู่ระบบ...";
+  }
+  if (cancelBtn) cancelBtn.disabled = true;
+
+  showLoading("กำลังเข้าสู่ระบบแอดมิน...");
+  // ================= UX END ===================
+
+  try {
+    // 🔐 CALL BACKEND LOGIN
+    const form = new URLSearchParams();
+    form.append("action", "adminLogin");
+    form.append("username", username);
+    form.append("password", password);
+
+    const res = await fetch(API_URL, {
+      method: "POST",
+      body: form
+    });
+
+    const json = await res.json();
+
+    if (!json.success || !json.token) {
+      throw new Error(json.error || json.message || "Login failed");
+    }
+
+    // ✅ SAVE SESSION (STATE)
+    state.admin.loggedIn = true;
+    state.admin.user = json.username;
+    state.admin.token = json.token;
+    state.admin.expiredAt = json.expiredAt;
+
+    // ✅ SAVE SESSION (PERSIST)
+    saveAdminSession(json);
+
+    // 🧹 CLOSE LOGIN SHEET
+    closeOverlay(adminLoginSheet);
+
+    // 🔓 reset lock เผื่อมีค้าง
+    state.ui.backdropLocked = false;
+
+    // 🚀 ENTER ADMIN MODE
+    enterAdmin();
+
+  } catch (err) {
+    console.error(err);
+    alert(err.message || "ไม่สามารถเข้าสู่ระบบได้");
+
+  } finally {
+    // ================= CLEANUP =================
+    safeHideLoading();
+    state.isSubmitting = false;
+
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Login";
+    }
+    if (cancelBtn) cancelBtn.disabled = false;
+  }
+}
+
+async function openAdminDashboard(mode = "PENDING", force = false) {
+  // ❌ ต้องมี intent จริง
+  if (!force && !allowOpenOrders) return;
+
+  // 🔐 session guard (ก่อนเปิด UI)
+  if (
+    !state.admin.loggedIn ||
+    !state.admin.token ||
+    isAdminSessionExpired()
+  ) {
+    alert("Session หมดอายุ กรุณา login ใหม่");
+    exitAdmin();
+    return;
+  }
+
+  // 🔒 ใช้แล้วปิดทันที (กันเด้งซ้ำ)
+  allowOpenOrders = false;
+
+  // ✅ ปิด Stock Timeline
+  closeOverlay(adminStockSheet);
+
+  // 🔍 reset search
+  state.search = "";
+
+  // ✅ Loading UI
+  adminDashboardSheet.innerHTML = `
+    <h3>${mode === "PENDING"
+      ? "Orders (รอดำเนินการ)"
+      : "Order History"}</h3>
+
+    <div class="loading">กำลังโหลดรายการ</div>
+  `;
+
+  openOverlay(adminDashboardSheet);
+
+  try {
+    state.admin.orders = await fetchOrders();
+
+    const orders = state.admin.orders.filter(o =>
+      mode === "PENDING"
+        ? o.status === "PENDING"
+        : o.status !== "PENDING"
+    );
+
+    adminDashboardSheet.innerHTML = `
+      <h3>${mode === "PENDING"
+        ? "Orders (รอดำเนินการ)"
+        : "Order History"}</h3>
+
+      ${
+        orders.length
+          ? orders.map(o => `
+              <div class="card"
+                onclick="openAdminOrder('${o.orderId}')">
+                <div class="name">${o.orderId}</div>
+                <div>Status: ${o.status}</div>
+                <div>Total: ฿${Number(o.total).toLocaleString()}</div>
+              </div>
+            `).join("")
+          : `
+            <div style="color:#888;text-align:center;margin-top:24px">
+              ${mode === "PENDING"
+                ? "ไม่มีรายการรอดำเนินการ"
+                : "ไม่มีประวัติออเดอร์"}
+            </div>
+          `
+      }
+    `;
+  } catch (err) {
+    console.error(err);
+
+    // 🔴 ถ้าเป็น session error → ออกทันที
+    if (
+      err.message?.includes("Session") ||
+      err.message?.includes("token")
+    ) {
+      alert("Session หมดอายุ กรุณา login ใหม่");
+      exitAdmin();
+      return;
+    }
+
+    adminDashboardSheet.innerHTML = `
+      <h3>Orders</h3>
+
+      <div style="text-align:center;color:#d93025;margin-top:32px">
+        ไม่สามารถโหลดรายการออเดอร์ได้
+      </div>
+
+      <button class="btn btn-secondary"
+        style="width:100%;margin-top:16px"
+        onclick="handleOpenOrders()">
+        🔄 ลองใหม่
+      </button>
+
+      <button class="btn"
+        style="width:100%;margin-top:8px"
+        onclick="finishAdminAction({ refresh:false })">
+        ← กลับ
+      </button>
+    `;
+  }
+}
+
+
+function handleOpenOrders() {
+  allowOpenOrders = true;
+  openAdminDashboard("PENDING");
+}
+
+
+function handleOpenStockTimeline(){
+  allowOpenStockTimeline = true;
+  openStockTimeline();
+}
+
+function handleOpenAddProduct(){
+  allowOpenAddProduct = true;
+  openAddProduct();
+}  
+
+async function openStockTimeline(force = false) {
+  // ❌ ต้องมี intent จริง
+  if (!force && !allowOpenStockTimeline) return;
+
+  // 🔐 session guard
+  if (
+    !state.admin.loggedIn ||
+    !state.admin.token ||
+    isAdminSessionExpired()
+  ) {
+    alert("Session หมดอายุ กรุณา login ใหม่");
+    exitAdmin();
+    return;
+  }
+
+  // 🔒 ใช้แล้วปิดทันที (กันเด้งซ้ำ)
+  allowOpenStockTimeline = false;
+
+  closeOverlay(adminDashboardSheet);
+
+  adminStockSheet.innerHTML = `
+    <h3>📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
+    <div class="loading">กำลังโหลด...</div>
+  `;
+
+  openOverlay(adminStockSheet);
+
+  try {
+    const logsRes = await fetchStockLogs();
+    const logs = Array.isArray(logsRes?.data) ? logsRes.data : [];
+
+    /* ================= GROUP ORDER OUT ================= */
+    const orderMap = {};
+    const singles = [];
+
+    logs.forEach(l => {
+  const time = l.timestamp ? new Date(l.timestamp) : new Date();
+
+  // ✅ ใช้ orderId จริงจาก sheet (fallback เผื่อของเก่า)
+  const orderRef = l.orderId || l.ref || null;
+
+  if (l.type === "OUT" && orderRef) {
+    if (!orderMap[orderRef]) {
+      orderMap[orderRef] = {
+        orderId: orderRef,
+        time,
+        by: l.by || "-",
+        items: []
+      };
+    }
+
+    orderMap[orderRef].items.push({
+      productId: l.productId,
+      qty: Math.abs(Number(l.qty || 0)),
+      before: l.before,
+      after: l.after
+    });
+  } else {
+    singles.push({
+      ...l,
+      _time: time
+    });
+  }
+});
+
+    /* ================= BUILD TIMELINE ================= */
+    const timeline = [];
+
+    Object.values(orderMap).forEach(o => {
+      timeline.push({
+        kind: "ORDER",
+        type: "OUT",
+        orderId: o.orderId,
+        time: o.time,
+        by: o.by,
+        items: o.items
+      });
+    });
+
+    singles.forEach(l => {
+      timeline.push({
+        kind: "STOCK",
+        type: l.type,
+        productId: l.productId,
+        qty: l.qty,
+        before: l.before,
+        after: l.after,
+        time: l._time,
+        by: l.by || "-"
+      });
+    });
+
+    // 🕒 latest first (safe)
+    timeline.sort((a, b) => b.time.getTime() - a.time.getTime());
+
+    /* ================= RENDER ================= */
+    adminStockSheet.innerHTML = `
+      <h3>📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
+
+      <button class="btn btn-secondary"
+        style="width:100%;margin-bottom:12px"
+        onclick="finishAdminAction({ refresh:false })">
+        ← กลับ
+      </button>
+
+      ${
+        timeline.length
+          ? timeline.map(t => {
+
+              if (t.kind === "ORDER") {
+                return `
+                  <div class="card">
+                    <div class="timeline-tag tag-out">
+                      🧾 ขายออก (ออเดอร์ ${t.orderId})
+                    </div>
+
+                    ${t.items.map(i => `
+                      <div style="font-size:14px;line-height:1.5">
+                        ${i.productId} x ${i.qty}
+                        ${
+                          Number.isFinite(i.before)
+                            ? `<span style="color:#888">
+                                (${i.before} → ${i.after})
+                              </span>`
+                            : ""
+                        }
+                      </div>
+                    `).join("")}
+
+                    <div style="font-size:12px;color:#888;margin-top:6px">
+                      ${t.time.toLocaleDateString("th-TH")}
+                      ${t.time.toLocaleTimeString("th-TH")}
+                      · โดย ${t.by}
+                    </div>
+                  </div>
+                `;
+              }
+
+              const typeMap = {
+                IN:     { text: "➕ รับสต๊อกเข้า", class: "tag-in" },
+                CREATE: { text: "🆕 เพิ่มสินค้าใหม่", class: "tag-create" },
+                ADJUST: { text: "✏️ ปรับสต๊อก", class: "tag-adjust" }
+              };
+
+              const cfg = typeMap[t.type] || { text: t.type, class: "" };
+
+              return `
+                <div class="card">
+                  <div class="timeline-tag ${cfg.class}">
+                    ${cfg.text}
+                  </div>
+
+                  <div style="font-size:14px">
+                    ${t.productId}
+                    ${
+                      Number.isFinite(t.before)
+                        ? ` (${t.before} → ${t.after})`
+                        : ""
+                    }
+                  </div>
+
+                  <div style="font-size:12px;color:#888;margin-top:6px">
+                    ${t.time.toLocaleDateString("th-TH")}
+                    ${t.time.toLocaleTimeString("th-TH")}
+                    · โดย ${t.by}
+                  </div>
+                </div>
+              `;
+            }).join("")
+          : `
+            <div style="text-align:center;color:#888;margin-top:32px">
+              ไม่มีข้อมูลประวัติสต๊อก
+            </div>
+          `
+      }
+    `;
+
+  } catch (err) {
+    console.error(err);
+
+    adminStockSheet.innerHTML = `
+      <h3>📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
+      <div style="text-align:center;color:#d93025;margin-top:32px">
+        ไม่สามารถโหลดข้อมูลได้
+      </div>
+    `;
+  }
+}
+
+
+
+function openAdminOrder(orderId){
+  // 🔒 A6 GUARD: ห้ามเปิด Admin Order UI ถ้าไม่ได้อยู่ admin หรือ session ไม่พร้อม
+  if (
+    state.mode !== "admin" ||
+    !state.admin.loggedIn ||
+    !state.admin.token ||
+    isAdminSessionExpired()
+  ) {
+    // ใช้มาตรฐานเดียวกับ admin dashboard
+    exitAdmin();
+    return;
+  }
+
+   // 🔒 A6 HARDEN: กัน orders ยังไม่พร้อม/ไม่ใช่ array (กัน throw → กัน UI leak)
+  const orders = Array.isArray(state.admin.orders) ? state.admin.orders : [];
+  const order = orders.find(o => o.orderId === orderId);
+  if (!order) return;
+
+  state.admin.selectedOrder = order;
+
+  // ✅ FIX: items เป็น array อยู่แล้ว ไม่ต้อง parse
+  const items = Array.isArray(order.items)
+    ? order.items
+    : [];
+
+  adminOrderSheet.innerHTML = `
+    <h3>${order.orderId}</h3>
+
+    ${items.map(i => `
+      <div class="cart-item">
+        <div>${i.name} x ${i.qty}</div>
+        <div>฿${i.price * i.qty}</div>
+      </div>
+    `).join("")}
+
+    <div class="total">Total: ฿${order.total}</div>
+
+    <div class="admin-action">
+      <button class="btn btn-approve" onclick="handleApprove()">
+        Approve
+      </button>
+
+      <button class="btn btn-reject" onclick="handleReject()">
+        Reject
+      </button>
+    </div>
+  `;
+
+  // ❌ ห้ามปิดด้วย classList
+  closeOverlay(adminDashboardSheet);
+
+  // ✅ เปิดผ่าน Overlay Manager
+  openOverlay(adminOrderSheet);
+}
+
+async function handleApprove() {
+  // 🔒 GUARD: ต้องอยู่ใน admin mode และมี order
+  if (state.mode !== "admin" || !state.admin.selectedOrder) return;
+
+  try {
+    const o = state.admin.selectedOrder;
+
+    // ✅ CORE: ใช้ API เวอร์ชันใหม่ (มี loading + toast + guard)
+    await adminApproveOrder(o.orderId);
+
+    // ✅ ปิดหน้า Order Detail ผ่าน Overlay Manager
+    closeOverlay(adminOrderSheet);
+
+    // 🔄 refresh stock + product list
+    await refreshProducts();
+
+    // ✅ อนุญาตให้เปิด Orders (เฉพาะ flow นี้)
+    allowOpenOrders = true;
+
+    // ✅ กลับไปหน้า Orders (รอดำเนินการ)
+    await openAdminDashboard("PENDING", true);
+
+  } catch (err) {
+    // ❌ ไม่ต้อง alert ซ้ำ
+    // toast + error handling จัดการใน adminApproveOrder แล้ว
+    console.warn("handleApprove aborted:", err);
+  }
+}
+
+async function handleReject() {
+  // 🔒 GUARD: ต้องอยู่ใน admin mode และมี order
+  if (state.mode !== "admin" || !state.admin.selectedOrder) return;
+
+  try {
+    const o = state.admin.selectedOrder;
+
+    // ✅ CORE: ใช้ API เวอร์ชันใหม่ (มี loading + toast + guard)
+    await adminRejectOrder(o.orderId);
+
+    // ✅ ปิดหน้า Order Detail ผ่าน Overlay Manager
+    closeOverlay(adminOrderSheet);
+
+    // 🔄 รีเฟรชสินค้า (แม้ reject จะไม่ตัด stock แต่ UI ต้อง sync)
+    await refreshProducts();
+
+    // ✅ อนุญาตให้เปิด Orders (เฉพาะ flow นี้)
+    allowOpenOrders = true;
+
+    // ✅ กลับไปหน้า Orders (รอดำเนินการ)
+    await openAdminDashboard("PENDING", true);
+
+  } catch (err) {
+    // ❌ ไม่ต้อง alert ซ้ำ
+    // toast + error handling จัดการใน adminRejectOrder แล้ว
+    console.warn("handleReject aborted:", err);
+  }
+}
+
+async function submitStockIn(){
+  // 🔒 guard
+  if (state.mode !== "admin" || !state.selectedProduct) {
+    alert("Unauthorized");
+    return;
+  }
+
+  const qtyInput    = document.getElementById("stockQty");
+  const reasonInput = document.getElementById("stockReason");
+
+  const qty    = Number(qtyInput.value);
+  const reason = reasonInput.value.trim();
+
+  // 🔍 validate
+  if (!Number.isInteger(qty) || qty <= 0) {
+    alert("จำนวนไม่ถูกต้อง");
+    qtyInput.focus();
+    return;
+  }
+
+  // 🔒 disable ปุ่มกันกดซ้ำ
+  const buttons = adminStockActionSheet.querySelectorAll("button");
+  buttons.forEach(b => b.disabled = true);
+
+  try {
+    const res = await adminStockIn(
+      state.selectedProduct.productId,
+      qty,
+      reason
+    );
+
+    if (res.error) {
+      throw new Error(res.error);
+    }
+
+    alert("รับสต๊อกเข้าแล้ว");
+
+    // 🔄 refresh สินค้า
+    await refreshProducts();
+
+    // 🧹 reset input
+    qtyInput.value = "";
+    reasonInput.value = "";
+
+    // ✅ ปิด Stock Action ผ่าน Overlay Manager
+    closeOverlay(adminStockActionSheet);
+
+    // ✅ กลับสู่หน้าแม่ของ admin แบบนิ่ง
+    finishAdminAction({ refresh: true });
+
+  } catch (err) {
+    console.error(err);
+    alert(err.message || "ไม่สามารถรับสต๊อกได้");
+  } finally {
+    // 🔓 เปิดปุ่มกลับทุกกรณี
+    buttons.forEach(b => b.disabled = false);
+  }
+}
+
+
+async function submitStockAdjust(){
+  // 🔒 guard
+  if (state.mode !== "admin" || !state.admin.loggedIn || !state.selectedProduct) {
+    alert("Unauthorized");
+    return;
+  }
+
+  const qtyInput    = document.getElementById("stockQty");
+  const reasonInput = document.getElementById("stockReason");
+
+  const newQty = Number(qtyInput.value);
+  const reason = reasonInput.value.trim();
+
+  // 🔍 validate
+  if (!Number.isInteger(newQty) || newQty < 0) {
+    alert("จำนวนไม่ถูกต้อง");
+    qtyInput.focus();
+    return;
+  }
+
+  // 🔒 disable ปุ่มกันกดซ้ำ
+  const buttons = adminStockActionSheet.querySelectorAll("button");
+  buttons.forEach(b => b.disabled = true);
+
+  try {
+    const res = await adminStockAdjust(
+      state.selectedProduct.productId,
+      newQty,
+      reason
+    );
+
+    if (res.error) {
+      throw new Error(res.error);
+    }
+
+    alert("ปรับสต๊อกแล้ว");
+
+    // 🔄 refresh สินค้า
+    await refreshProducts();
+
+    // 🧹 reset input
+    qtyInput.value = "";
+    reasonInput.value = "";
+
+    // ✅ ปิด Stock Action ผ่าน Overlay Manager
+    closeOverlay(adminStockActionSheet);
+
+    // ✅ กลับไปหน้าเมนูจัดการสินค้า (flow ต่อเนื่องถูกต้อง)
+    openAdminProductAction(state.selectedProduct);
+
+  } catch (err) {
+    console.error(err);
+    alert(err.message || "ไม่สามารถปรับสต๊อกได้");
+  } finally {
+    // 🔓 เปิดปุ่มกลับทุกกรณี
+    buttons.forEach(b => b.disabled = false);
+  }
+}
+  
+function openStockAction(p){
+  // 🔒 guard
+  if (state.mode !== "admin") return;
+
+  state.selectedProduct = p;
+
+  adminStockActionSheet.innerHTML = `
+    <h3>จัดการสต๊อก</h3>
+    <div>${p.name}</div>
+    <div>คงเหลือ: ${p.stock}</div>
+
+    <div class="form-group">
+      <label>จำนวน</label>
+      <div class="qty-input">
+        <input
+          id="stockQty"
+          type="number"
+          min="0"
+          placeholder="เช่น 10"
+        >
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>หมายเหตุ</label>
+      <input
+        id="stockReason"
+        placeholder="ถ้ามี"
+      >
+    </div>
+
+    <button
+      class="btn btn-secondary"
+      onclick="submitStockIn()">
+      ➕ รับเข้า (IN)
+    </button>
+
+    <button
+      class="btn btn-primary"
+      style="margin-top:8px"
+      onclick="submitStockAdjust()">
+      ✏️ ปรับยอด
+    </button>
+  `;
+
+  // ✅ เปิดผ่าน Overlay Manager เท่านั้น
+  openOverlay(adminStockActionSheet);
+}
+
+async function refreshProductsWithFeedback({
+  loadingText = "กำลังโหลดรายการสินค้า...",
+  successText = "อัปเดตสินค้าเรียบร้อย",
+  silent = false
+} = {}) {
+  try {
+    // 1️⃣ แสดงข้อมูลเดิมก่อน (UX ลื่น)
+    if (Array.isArray(state.products) && state.products.length) {
+      renderProducts();
+    }
+
+    // 2️⃣ แจ้งว่ากำลังโหลด (เลือกได้)
+    if (!silent) {
+      showToast(loadingText, "info", 1200);
+    }
+
+    // 3️⃣ ใช้ CORE function (single source of truth)
+    await refreshProducts();
+
+    // 4️⃣ แจ้งผลสำเร็จ
+    if (!silent) {
+      showToast(successText, "success", 1000);
+    }
+
+  } catch (err) {
+    console.error(err);
+
+    // 5️⃣ แจ้ง error แบบไม่พัง UI
+    if (!silent) {
+      showToast("ไม่สามารถโหลดข้อมูลสินค้าได้", "error");
+    }
+  }
+}
+ 
+function openMainMenu(){
+  const adminValid =
+    state.admin.loggedIn &&
+    state.admin.token &&
+    !isAdminSessionExpired();
+
+  // ✅ ถ้าอยู่ใน admin mode แต่ session ไม่ valid → ค่อยบังคับออก
+  if (state.mode === "admin" && !adminValid) {
+    alert("Session หมดอายุ กรุณา login ใหม่");
+    exitAdmin();
+    return;
+  }
+
+  // ✅ STEP A2: เงื่อนไข "ล็อกอินแล้ว" ต้องอิงสิทธิ์ (adminValid) ไม่ใช่โหมด UI
+  const isAuthed = !!adminValid;
+
+  // ✅ STEP 2: Main Menu v1 = Login only (ถ้ายังไม่อยู่ admin mode)
+  mainMenuSheet.innerHTML = `
+    <h3>Main Menu</h3>
+
+    <!-- 🔹 MAIN ACTIONS -->
+    <div class="menu-group">
+      ${
+        (isAuthed)
+          ? (state.mode === "admin")
+            ? `
+                <button class="btn btn-secondary"
+                  onclick="closeMainMenu(); leaveAdminMode();">
+                  👁 กลับสู่ Viewer
+                </button>
+
+                <button class="btn btn-primary"
+                  onclick="closeMainMenu(); handleOpenOrders();">
+                  📦 Orders
+                </button>
+
+                <button class="btn btn-secondary"
+                  onclick="closeMainMenu(); handleOpenStockTimeline();">
+                  📦 Stock Timeline
+                </button>
+
+                <button class="btn btn-secondary"
+                  onclick="closeMainMenu(); handleOpenAddProduct();">
+                  ➕ เพิ่มสินค้าใหม่
+                </button>
+              `
+            : `
+                <button class="btn btn-primary"
+                  onclick="closeMainMenu(); enterAdmin();">
+                 🧭 ไป Admin Dashboard
+                </button>
+
+                <button class="btn btn-secondary" disabled
+                  style="opacity:.8; cursor:default;">
+                  👁 อยู่ใน Viewer
+                </button>
+              `
+          : `
+              <button class="btn btn-primary"
+                onclick="closeMainMenu(); openAdminEntry();">
+                🔑 Admin Login
+              </button>
+            `
+      }
+    </div>
+
+    ${
+      (isAuthed)
+        ? `
+          <hr>
+          <div class="menu-group danger">
+            <button class="btn btn-danger"
+               onclick="closeMainMenu(); exitAdmin();">
+               🚪 Logout
+             </button>
+          </div>
+        `
+        : ``
+    }
+  `;
+
+  // ✅ เปิดผ่าน Overlay Manager เท่านั้น
+  openOverlay(mainMenuSheet);
+}
+
+function openAddProduct(force = false){
+  // ❌ ต้องมี intent จริง
+  if (!force && !allowOpenAddProduct) return;
+
+  // 🔐 session + mode guard
+  if (
+    state.mode !== "admin" ||
+    !state.admin.loggedIn ||
+    !state.admin.token ||
+    isAdminSessionExpired()
+  ) {
+    alert("Session หมดอายุ กรุณา login ใหม่");
+    exitAdmin();
+    return;
+  }
+
+  // 🔒 ใช้แล้วปิดทันที
+  allowOpenAddProduct = false;
+
+  state.addImageFile = null;
+  const draft = state.smartAddDraft || {};
+  // 🔒 guard: กัน textarea ปิดแท็กเอง (DOM แตก)
+  const safeNote = String(draft.note || "").replace(/<\/textarea>/gi, "");
+
+
+  adminAddProductSheet.innerHTML = `
+    <h3>➕ เพิ่มสินค้าใหม่</h3>
+
+    <div style="font-size:13px;color:#666;margin-bottom:12px">
+      ℹ️ การเพิ่มสินค้าใหม่จะถูกบันทึกใน Stock Timeline
+    </div>
+
+    <div class="form-group">
+      <label>รหัสสินค้า (SKU)</label>
+      <input id="addProductId" placeholder="เช่น P002">
+    </div>
+
+    <div class="form-group">
+      <label>ชื่อสินค้า</label>
+      <input id="addName" placeholder="ชื่อสินค้า">
+    </div>
+
+    <div class="form-group">
+      <label>ราคาขาย</label>
+      <input id="addPrice" type="number" value="${draft.price || ""}" placeholder="0">
+    </div>
+
+    <div class="form-group">
+      <label>ราคาต้นทุน</label>
+      <input id="addCostPrice" type="number" value="${draft.costPrice || ""}" placeholder="0">
+    </div>
+
+    <div class="form-group">
+      <label>จำนวน (สต๊อกเริ่มต้น)</label>
+      <input id="addStock" type="number" value="${draft.stock || ""}" placeholder="0">
+    </div>
+
+    <!-- 🔴 สถานะสินค้า (เพื่อแจ้งลูกค้า) -->
+    <div class="form-group">
+      <label>สถานะสินค้า</label>
+      <select id="addStatus">
+        <option value="ready" ${draft.status==="ready"?"selected":""}>พร้อมส่ง</option>
+        <option value="shipping" ${draft.status==="shipping"?"selected":""}>อยู่ระหว่างจัดส่ง</option>
+        <option value="warehouse" ${draft.status==="warehouse"?"selected":""}>อยู่โกดังไทย</option>
+        <option value="out" ${draft.status==="out"?"selected":""}>หมด</option>
+      </select>
+    </div>
+
+<!-- 📝 NEW: NOTE FIELD -->
+<div class="form-group">
+  <label>หมายเหตุสินค้า</label>
+  <textarea
+    id="addNote"
+    rows="3"
+    placeholder="เช่น ของแถม / ตำหนิเล็กน้อย / หมายเหตุถึงลูกค้า"
+    style="
+      resize:none;
+      line-height:1.4;
+      border-radius:12px;
+      padding:10px 12px;
+    "
+  >${safeNote}</textarea>
+</div>
+
+    <div class="form-group">
+      <label>รูปสินค้า</label>
+      <img id="addImagePreview"
+        style="width:120px;border-radius:12px;display:none;margin-bottom:6px">
+      <input type="file"
+        accept="image/*"
+        onchange="handleAddImagePreview(this)">
+    </div>
+
+    <!-- 🔁 CONTINUE MODE -->
+    <div class="form-group">
+      <label class="continue-row">
+        <input type="checkbox" id="addContinueMode">
+        <span class="continue-text">เพิ่มต่อเนื่อง (คัดลอกข้อมูลเดิม)</span>
+      </label>
+    </div>
+
+    <button class="btn btn-primary"
+      style="width:100%;margin-top:16px"
+      onclick="submitAddProduct(this)">
+      บันทึกสินค้า
+    </button>
+
+    <button class="btn btn-secondary"
+      style="width:100%;margin-top:8px"
+      onclick="closeAddProduct()">
+      ยกเลิก
+    </button>
+  `;
+
+  openOverlay(adminAddProductSheet);
+}
+
+function handleAddImagePreview(input){
+  const file = input.files[0];
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = document.getElementById("addImagePreview");
+    img.src = reader.result;
+    img.style.display = "block";
+
+    state.addImageFile = file; // เก็บไว้ใช้ upload
+  };
+  reader.readAsDataURL(file);
+}
+
+function closeAddProduct(){
+  state.addImageFile = null;
+  closeOverlay(adminAddProductSheet);
+}
+  
+function closeMainMenu(){
+  closeOverlay(mainMenuSheet);
+ }
+
+/* ================= VIEWER FLOW ================= */
+function openProduct(p){
+  // 🔴 ADMIN FLOW
+  // แอดมิน → ไม่เปิด product sheet แบบผู้ใช้
+  if (state.mode === "admin") {
+    openAdminProductAction(p);
+    return;
+  }
+
+  // 🟢 VIEWER FLOW
+  state.selectedProduct = p;
+  state.qty = 1;
+
+  renderProductSheet();
+
+  // ✅ เปิดผ่าน Overlay Manager เท่านั้น
+  openOverlay(productSheet);
+}
+
+// 🔴 NEW: cancel admin login
+function cancelAdminLogin(){
+  closeOverlay(adminLoginSheet);
+}
+  
+function closeProduct(){
+  closeOverlay(productSheet);
+}
+
+async function submitOrder(){
+  // ❌ ห้ามใช้ state.loading เป็น guard
+  if (state.isSubmitting || state.cart.length === 0) return;
+
+  state.isSubmitting = true;
+  state.ui.backdropLocked = true;
+
+  try {
+    // ================= STEP 1: CHECK STOCK =================
+    showLoading('กำลังตรวจสอบสต๊อก...');
+    const stockCheck = await checkStockBeforeSubmit();
+
+    if (!stockCheck.ok) {
+      showToast(stockCheck.message, 'warning');
+      throw new Error("STOCK_CHECK_FAILED");
+    }
+
+    // ================= STEP 2: CREATE ORDER =================
+    updateLoadingText('กำลังสร้างใบสั่งซื้อ...');
+    const res = await createOrder();
+
+    if (!res || res.success !== true || !res.data?.orderId) {
+      throw new Error("Invalid order response");
+    }
+
+    // ================= SUCCESS =================
+    state.lastOrder = {
+      orderId: res.data.orderId,
+      items: JSON.parse(JSON.stringify(state.cart)),
+      total: state.cart.reduce(
+        (s,i)=> s + Number(i.price) * Number(i.qty),
+        0
+      ),
+ createdAt: new Date(),
+ poNumber: state.poNumber || ""
+    };
+
+    showToast('สร้างใบสั่งซื้อเรียบร้อยแล้ว', 'success');
+    showToast("กดปุ่มเพื่อดาวน์โหลดใบสั่งซื้อ", "info", 3000);
+
+ // เปิด confirmSheet ใหม่พร้อมปุ่มดาวน์โหลด
+ confirmSheet.innerHTML = `
+   <h3>สร้างใบสั่งซื้อสำเร็จ</h3>
+   <div style="margin-top:12px">
+     เลขที่ใบสั่งซื้อ: ${res.data.orderId}
+   </div>
+   <button class="btn btn-primary"
+     style="margin-top:16px"
+     onclick="exportOrderPrint()">
+     ดาวน์โหลดใบสั่งซื้อ
+   </button>
+
+   <button class="btn btn-secondary"
+    style="margin-top:8px"
+    onclick="
+      state.ui.backdropLocked = false;
+      closeOverlay(confirmSheet);
+    ">
+    ปิด
+  </button>
+ `;
+
+// confirmSheet เปิดอยู่แล้ว ไม่ต้อง reopen
+
+    state.cart = [];
+    clearCartStorage();
+    state.poNumber = "";
+    if (typeof renderBadge === "function") renderBadge();
+    // 🔴 CHANGED: เคลียร์ตะกร้าแล้วต้องซ่อน/รีเฟรช floating bar
+    if (typeof renderFloatingBar === "function") renderFloatingBar();
+    
+  // ❌ ห้าม auto reset หลังสร้าง order สำเร็จ
+    
+  } catch(err){
+    console.error(err);
+    // 🔒 ถ้า fail เพราะ stock-check เรา toast ไปแล้ว ไม่ต้องซ้ำ
+    if (err && err.message === "STOCK_CHECK_FAILED") return;
+
+    showToast(
+      err.message || 'เกิดข้อผิดพลาดในการสร้างใบสั่งซื้อ',
+      'error'
+    );
+  } finally {
+    safeHideLoading();
+    state.isSubmitting = false;
+    // 🔒 ปลด lock เฉพาะเมื่อไม่มี sheet เปิดอยู่ (กัน race condition)
+    if (state.ui.overlayCount === 0) {
+      state.ui.backdropLocked = false;
+    }
+  }
+}
+
+
+function openCart(){
+  renderCart();
+
+  // 🔴 CHANGED: เมื่อเปิด cart sheet → ซ่อน floatingBar ไม่ให้บัง
+  const bar = document.getElementById("floatingBar");
+  if (bar) bar.classList.remove("show");
+
+  // ✅ เปิดผ่าน Overlay Manager เท่านั้น
+  openOverlay(cartSheet);
+}
+
+function closeCart(){
+  closeOverlay(cartSheet);
+
+  // 🔴 CHANGED: ปิดตะกร้าแล้วต้อง "คืน" floatingBar ถ้ายังมีสินค้าอยู่
+  // ใช้ rAF เพื่อให้ overlayCount/state UI ปรับเสร็จก่อน แล้วค่อย render
+  if (typeof renderFloatingBar === "function") {
+    requestAnimationFrame(() => {
+      renderFloatingBar();
+    });
+  }
+}
+
+function removeItem(idx){
+  state.cart.splice(idx, 1);
+
+  // ✅ PERSIST: บันทึก cart ทุกครั้งที่มีการเปลี่ยน
+  saveCart();
+
+  if (typeof renderBadge === "function") renderBadge();
+  // 🔴 CHANGED: sync floating bar หลังลบ item
+  if (typeof renderFloatingBar === "function") renderFloatingBar();
+
+  // 🔔 Feedback: แจ้งผู้ใช้ทันทีว่าลบแล้ว
+  showToast("ลบสินค้าออกจากตะกร้าแล้ว", "warning");
+
+  if(state.cart.length === 0){
+    hardResetUI();   // ✅ ปิดทุก sheet + backdrop
+  } else {
+    renderCart();
+  }
+}
+
+function openProductEdit(p){
+  // 🔒 A6 guard: ป้องกัน admin UI leak ตอนอยู่ Viewer
+  if (state.mode !== "admin" || !state.admin?.loggedIn || !state.admin?.token) return;
+
+  state.selectedProduct = p;
+  state.compareImagesDraft = (p.compareImages || "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  adminProductEditSheet.innerHTML = `
+    <h3>แก้ไขสินค้า</h3>
+
+    <div class="form-group">
+      <label>รหัสสินค้า (SKU)</label>
+      <input id="editProductId" value="${p.productId}">
+    </div>
+
+    <div class="form-group">
+      <label>ชื่อสินค้า</label>
+      <input id="editName" value="${p.name}">
+    </div>
+
+    <div class="form-group">
+      <label>ราคาขาย</label>
+      <input id="editPrice" type="number" value="${p.price}">
+    </div>
+    
+    <div class="form-group">
+      <label>ราคาต้นทุน</label>
+      <input id="editCostPrice" type="number" value="${Number(p.costPrice) || 0}">
+    </div>
+
+    <div class="form-group">
+      <label>จำนวน</label>
+      <input id="editStock" type="number" value="${p.stock}">
+    </div>
+
+    <div class="form-group">
+      <label>สถานะสินค้า</label>
+      <select id="editStatus">
+        <option value="ready" ${p.status === "ready" ? "selected" : ""}>
+          พร้อมส่ง
+        </option>
+        <option value="shipping" ${p.status === "shipping" ? "selected" : ""}>
+          อยู่ระหว่างจัดส่ง
+        </option>
+        <option value="warehouse" ${p.status === "warehouse" ? "selected" : ""}>
+          อยู่โกดังไทย
+        </option>
+        <option value="out" ${p.status === "out" ? "selected" : ""}>
+          หมด
+        </option>
+      </select>
+    </div>
+
+    <!-- 📝 NEW: NOTE FIELD -->
+    <div class="form-group">
+      <label>หมายเหตุสินค้า (สำหรับแอดมิน)</label>
+      <textarea
+        id="editNote"
+        rows="3"
+        placeholder="เช่น ตำหนิเล็กน้อย / ของแถม / หมายเหตุภายใน"
+        style="
+          resize: none;
+          font-size: 14px;
+          line-height: 1.4;
+          border-radius: 12px;
+          padding: 10px 12px;
+        "
+      >${p.note || ""}</textarea>
+    </div>
+
+    <!-- 📄 PRODUCT DETAIL (VIEWER) -->
+    <div class="form-group">
+      <label>รายละเอียดสินค้า (แสดงในปุ่มรายละเอียด)</label>
+      <textarea
+        id="editDetailsText"
+        rows="4"
+        placeholder="ใส่ทีละบรรทัด"
+      >${p.detailsText || ""}</textarea>
+    </div>
+
+<div class="form-group">
+  <label>รูปเทียบสินค้า</label>
+
+  <!-- preview -->
+  <div id="comparePreview"
+       style="display:flex;gap:8px;overflow-x:auto;margin-bottom:8px">
+  ${
+    state.compareImagesDraft.map((url, idx) => `
+      <div style="position:relative">
+        <img src="${url}"
+             style="
+               width:80px;
+               height:80px;
+               object-fit:cover;
+               border-radius:10px;
+               box-shadow: var(--shadow-image)
+             ">
+        <button
+          onclick="removeCompareImage(${idx})"
+          style="
+            position:absolute;
+            top:-6px;
+            right:-6px;
+            width:20px;
+            height:20px;
+            border:none;
+            border-radius:50%;
+            background:#ff3b30;
+            color:#fff;
+            font-size:12px;
+            cursor:pointer;
+          "
+        >×</button>
+      </div>
+    `).join("")
+  }
+  </div>
+
+  <!-- upload -->
+  <input
+    type="file"
+    multiple
+    accept="image/*"
+    onchange="handleCompareImagesUpload(this)">
+</div>
+
+    <!-- รูปสินค้า -->
+    <div class="form-group">
+      <label>รูปสินค้า</label>
+      <img id="imagePreview"
+        src="${p.image || ""}"
+        style="width:100%;border-radius:12px;margin-bottom:6px">
+      <input type="file"
+        accept="image/*"
+        onchange="handleImagePreview(this)">
+    </div>
+
+    <button class="btn btn-primary"
+      style="width:100%;margin-top:16px"
+      onclick="submitProductEdit()">
+      บันทึก
+    </button>
+
+    <button class="btn btn-secondary"
+      style="width:100%;margin-top:8px"
+      onclick="closeProductEdit()">
+      ยกเลิก
+    </button>
+
+    <!-- 🔴 SOFT DELETE PRODUCT -->
+
+ ${p.active === false ? `
+   <div style="
+     margin-top:16px;
+     font-size:13px;
+     color:#888;
+     text-align:center
+   ">
+     ⛔ สินค้านี้ถูกลบแล้ว
+   </div>
+ ` : `
+   <button class="btn btn-danger"
+     style="width:100%;margin-top:16px"
+     onclick="confirmDeleteProduct()">
+     🗑️ ลบสินค้า
+   </button>
+ `}
+  `;
+
+  openOverlay(adminProductEditSheet); // ✅ ใช้ Overlay Manager
+}
+
+function removeCompareImage(index){
+  if (!Array.isArray(state.compareImagesDraft)) return;
+
+  state.compareImagesDraft.splice(index, 1);
+
+  // re-render preview อย่างเดียว
+  const wrap = document.getElementById("comparePreview");
+  if (!wrap) return;
+
+  wrap.innerHTML = state.compareImagesDraft.map((url, idx) => `
+    <div style="position:relative">
+      <img src="${url}"
+           style="
+             width:80px;
+             height:80px;
+             object-fit:cover;
+             border-radius:10px;
+             box-shadow: var(--shadow-image)
+           ">
+      <button
+        onclick="removeCompareImage(${idx})"
+        style="
+          position:absolute;
+          top:-6px;
+          right:-6px;
+          width:20px;
+          height:20px;
+          border:none;
+          border-radius:50%;
+          background:#ff3b30;
+          color:#fff;
+          font-size:12px;
+          cursor:pointer;
+        "
+      >×</button>
+    </div>
+  `).join("");
+}
+
+function handleImagePreview(input){
+  const file = input.files[0];
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    document.getElementById("imagePreview").src = reader.result;
+
+    // เก็บไฟล์ไว้รอ STEP 7.5.2
+    state.editImageFile = file;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function handleCompareImagesUpload(input){
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+
+  // 🔒 guard
+  if (!state.admin?.token) {
+    showToast("กรุณา login ใหม่", "warning");
+    return;
+  }
+
+  showLoading("กำลังอัปโหลดรูปเทียบสินค้า...");
+
+  try {
+    const urls = [];
+
+    for (const file of files) {
+      const url = await uploadProductImage(file);
+      if (url) urls.push(url);
+    }
+
+   // ✅ STEP 8: merge เข้า state เดียว
+   state.compareImagesDraft.push(...urls);
+
+   // 🔄 re-render preview ผ่าน state (มีปุ่ม ❌)
+   const wrap = document.getElementById("comparePreview");
+   if (wrap) {
+     wrap.innerHTML = state.compareImagesDraft.map((url, idx) => `
+       <div style="position:relative">
+         <img src="${url}"
+              style="
+                width:80px;
+                height:80px;
+                object-fit:cover;
+                border-radius:10px;
+                box-shadow: var(--shadow-image)
+              ">
+         <button
+           onclick="removeCompareImage(${idx})"
+           style="
+             position:absolute;
+             top:-6px;
+             right:-6px;
+             width:20px;
+             height:20px;
+             border:none;
+             border-radius:50%;
+             background:#ff3b30;
+             color:#fff;
+             font-size:12px;
+             cursor:pointer;
+           "
+         >×</button>
+       </div>
+     `).join("");
+   }
+  
+    showToast("อัปโหลดรูปเทียบสำเร็จ", "success");
+
+  } catch (err) {
+    console.error(err);
+    showToast("อัปโหลดรูปไม่สำเร็จ", "error");
+  } finally {
+    safeHideLoading();
+    input.value = "";
+  }
+}
+  
+function closeProductEdit(){
+  state.editImageFile = null;
+  closeOverlay(adminProductEditSheet);
+}
+
+async function uploadProductImage(file) {
+  return new Promise((resolve, reject) => {
+    // 🔒 guard token
+    if (!state.admin || !state.admin.token) {
+      reject("Missing admin token");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = async () => {
+      try {
+        // 🔹 ตัด data:image/...;base64,
+        const base64 = reader.result.split(",")[1];
+
+        // ✅ ใช้ FormData
+        const formData = new FormData();
+        formData.append("action", "uploadProductImage"); // ✅ สำคัญ (ที่ขาดอยู่)
+        formData.append("token", state.admin.token);
+        formData.append("filename", file.name);
+        formData.append("mimeType", file.type || "image/jpeg");
+        formData.append("data", base64);
+
+        const res = await fetch(API_URL, {
+          method: "POST",
+          body: formData
+        });
+
+        const json = await res.json();
+
+        // 🔒 backend wrap data ไว้ใน data
+        if (!json.success || !json.data || !json.data.imageUrl) {
+          reject(json.error || json.message || "Upload failed");
+          return;
+        }
+
+        // ✅ สำเร็จ
+        resolve(json.data.imageUrl);
+
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    reader.onerror = () => {
+      reject("File read error");
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+  
+async function submitProductEdit(){
+  // 🔒 GUARD: กันกดซ้ำ
+  if (state.isSubmitting) return;
+
+  const p = state.selectedProduct;
+  if (!p) return;
+
+  state.isSubmitting = true;
+
+  // 🔒 LOCK BUTTON
+  const saveBtn = adminProductEditSheet.querySelector(".btn-primary");
+  const originalText = saveBtn?.textContent;
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "กำลังบันทึก...";
+  }
+
+  const name   = document.getElementById("editName").value.trim();
+  const price  = Number(document.getElementById("editPrice").value);
+  const costPrice = Number(document.getElementById("editCostPrice").value);
+  const stock  = Number(document.getElementById("editStock").value);
+  const status = document.getElementById("editStatus").value;
+  const newProductId = document.getElementById("editProductId").value.trim();
+  const oldProductId = p.productId;
+  const note   = document.getElementById("editNote")?.value.trim() || "";
+  const detailsText =
+  document.getElementById("editDetailsText")?.value.trim() || "";
+
+ const compareImages =
+   Array.isArray(state.compareImagesDraft)
+     ? state.compareImagesDraft.join(",")
+     : "";
+
+  // 🔒 Validate
+  if (
+   !name ||
+   !newProductId ||
+   !Number.isFinite(price) ||
+   !Number.isFinite(costPrice) ||
+   !Number.isFinite(stock) ||
+   price < 0 ||
+   costPrice < 0 || 
+   stock < 0
+ ) {
+    showToast("ข้อมูลไม่ถูกต้อง", "error");
+
+    // 🔓 คืนสภาพทันที
+    state.isSubmitting = false;
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalText;
+    }
+    return;
+  }
+
+  // 🔒 SKU Duplicate Check (วางตรงนี้เท่านั้น)
+  const duplicate = state.products.find(
+    x => x.productId === newProductId && x.productId !== oldProductId
+  );
+ 
+  if (duplicate) {
+    showToast("รหัสสินค้านี้มีอยู่แล้ว", "error");
+    state.isSubmitting = false;
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalText;
+    }
+    return;
+  }
+
+  let imageUrl = p.image || "";
+
+  try {
+    showLoading("กำลังบันทึกการแก้ไขสินค้า...");
+
+    // ถ้ามีการเลือกภาพใหม่ → upload ก่อน
+    if (state.editImageFile) {
+      imageUrl = await uploadProductImage(state.editImageFile);
+      if (!imageUrl) {
+        throw new Error("ไม่สามารถอัปโหลดรูปได้");
+      }
+    }
+
+    // Update product
+    const form = new URLSearchParams();
+    form.append("action", "updateProduct");
+    form.append("token", state.admin.token);
+    form.append("oldProductId", oldProductId);
+    form.append("newProductId", newProductId);
+    form.append("name", name);
+    form.append("price", price);
+    form.append("costPrice", costPrice);
+    form.append("stock", stock);
+    form.append("status", status);
+    form.append("image", imageUrl);
+    form.append("note", note);
+    form.append("detailsText", detailsText);
+    form.append("compareImages", compareImages);
+
+    const res = await fetch(API_URL, {
+      method: "POST",
+      body: form
+    }).then(r => r.json());
+
+    if (res.error || res.success === false) {
+      throw new Error(res.message || res.error || "บันทึกไม่สำเร็จ");
+    }
+
+    showToast("บันทึกการแก้ไขเรียบร้อย", "success");
+
+    state.selectedProduct = null;
+
+    // cleanup
+    state.editImageFile = null;
+    closeProductEdit();
+    await refreshProducts();
+
+  } catch (err) {
+    console.error(err);
+    showToast(
+      err.message || "เกิดข้อผิดพลาดในการบันทึกสินค้า",
+      "error"
+    );
+
+  } finally {
+    // ✅ CLEANUP กลางเดียว (หัวใจ STEP 9)
+    safeHideLoading();
+    state.isSubmitting = false;
+
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalText;
+    }
+  }
+}
+
+function confirmDeleteProduct() {
+  if (state.mode !== "admin") return;
+  if (state.admin.isSubmitting || state.isSubmitting) return;
+  const p = state.selectedProduct;
+  if (!p) return;
+
+  // 🔒 กันลบซ้ำ
+  if (p.active === false) {
+    showToast("สินค้านี้ถูกลบไปแล้ว", "warning");
+    return;
+  }
+  
+ const ok = confirm(
+   `⚠️ ลบสินค้าแบบถาวร\n\n` +
+   `สินค้า: "${p.name}"\n` +
+   `รหัส: ${p.productId}\n\n` +
+   `การลบนี้ไม่สามารถกู้คืนได้\n\n` +
+   `กด OK เพื่อยืนยัน`
+ );
+
+  if (!ok) return;
+
+  deleteProduct();
+}
+
+async function deleteProduct() {
+  if (state.admin.isSubmitting || state.isSubmitting) return;
+
+  const p = state.selectedProduct;
+  if (!p || !state.admin.token) return;
+
+  state.admin.isSubmitting = true;
+  state.isSubmitting = true;
+
+  try {
+    showLoading("กำลังลบสินค้า...");
+
+    const form = new URLSearchParams();
+    form.append("action", "deleteProduct");
+    form.append("token", state.admin.token);
+    form.append("productId", p.productId);
+
+    const res = await fetch(API_URL, {
+      method: "POST",
+      body: form
+    }).then(r => r.json());
+
+    if (res.error || res.success === false) {
+      if (
+        res.error === "Session expired" ||
+        res.error === "Invalid token" ||
+        res.error === "Missing token"
+      ) {
+        showToast("Session หมดอายุ กรุณา login ใหม่", "warning");
+        exitAdmin();
+        return;
+      }
+        throw new Error(
+        res.message || res.error || "ไม่สามารถลบสินค้าได้ (อาจถูกลบแล้ว)"
+      );
+    }
+    
+    showToast("ลบสินค้าเรียบร้อย", "success");
+
+    closeProductEdit();
+
+    // 🔒 clear selection ก่อน sync
+    state.selectedProduct = null;
+
+    // 🔄 refresh สินค้า
+    await refreshProducts();
+
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || "เกิดข้อผิดพลาดในการลบสินค้า", "error");
+
+  } finally {
+    safeHideLoading();
+    state.admin.isSubmitting = false;
+    state.isSubmitting = false;
+  }
+}
+  
+  
+async function submitAddProduct(btn){
+  // 🔒 guard
+  if(state.mode !== "admin" || !state.admin.loggedIn){
+    alert("Unauthorized");
+    return;
+  }
+
+  // 🔒 กันกดซ้ำ
+  if(state.isSubmitting) return;
+  state.isSubmitting = true;
+
+  // ✅ ใช้ปุ่มจาก parameter
+  if(btn){
+    btn.disabled = true;
+    btn.textContent = "กำลังบันทึกสินค้า...";
+  }
+
+  try {
+    // 🔔 UX: แจ้งเริ่มกระบวนการ
+    showLoading("กำลังตรวจสอบข้อมูลสินค้า...");
+    const productId = document.getElementById("addProductId").value.trim();
+    const name      = document.getElementById("addName").value.trim();
+    const price     = Number(document.getElementById("addPrice").value);
+    const costPrice = Number(document.getElementById("addCostPrice").value);
+    const stock     = Number(document.getElementById("addStock").value);
+ let status      = document.getElementById("addStatus").value;
+ const note      = document.getElementById("addNote")?.value.trim() || "";
+ const continueMode =
+   document.getElementById("addContinueMode")?.checked === true;   
+ const active    = true; // 🔒 เพิ่มสินค้าใหม่ = ยังขายอยู่เสมอ
+
+    /* ================= VALIDATE ================= */
+
+    if (!productId) {
+      document.getElementById("addProductId").focus();
+      throw new Error("กรุณากรอกรหัสสินค้า (SKU)");
+    }
+
+    if (!name) {
+      document.getElementById("addName").focus();
+      throw new Error("กรุณากรอกชื่อสินค้า");
+    }
+
+    if (!Number.isInteger(price) || !Number.isInteger(costPrice) || !Number.isInteger(stock)) {
+      throw new Error("ราคา ราคาต้นทุน และจำนวน ต้องเป็นตัวเลขจำนวนเต็ม");
+    }
+
+    if (price < 0 || costPrice < 0 || stock < 0) {
+      throw new Error("ราคา ราคาต้นทุน และจำนวน ต้องมากกว่าหรือเท่ากับ 0");
+    }
+
+    const dup = state.products.find(p => p.productId === productId);
+    if (dup) {
+      document.getElementById("addProductId").focus();
+      throw new Error("รหัสสินค้า (SKU) นี้มีอยู่แล้ว");
+    }
+
+    /* ================= AUTO STATUS ================= */
+    if (stock === 0) {
+      status = "out";
+    }
+
+    /* ================= IMAGE UPLOAD ================= */
+
+    let imageUrl = "";
+    if (state.addImageFile) {
+      showLoading("กำลังอัปโหลดรูปสินค้า...");
+      imageUrl = await uploadProductImage(state.addImageFile);
+      if (!imageUrl) {
+        throw new Error("อัปโหลดรูปไม่สำเร็จ");
+      }
+    }
+
+    /* ================= SEND TO BACKEND ================= */
+    showLoading("กำลังบันทึกข้อมูลสินค้า...");
+    
+    const form = new URLSearchParams();
+    form.append("action", "addProduct"); // ✅ FIX จุดเดียวที่เป็นปัญหา
+    form.append("token", state.admin.token);
+    form.append("productId", productId);
+    form.append("name", name);
+    form.append("price", price);
+    form.append("costPrice", costPrice);
+    form.append("stock", stock);
+  form.append("active", active);
+  form.append("status", status);
+    form.append("image", imageUrl);
+    form.append("note", note);
+
+    const res = await fetch(API_URL, {
+      method: "POST",
+      body: form
+    }).then(r => r.json());
+
+    if(res.error || res.success === false){
+      throw new Error(res.message || res.error || "เพิ่มสินค้าไม่สำเร็จ");
+    }
+
+    showToast("เพิ่มสินค้าเรียบร้อย 🎉", "success");
+
+    state.addImageFile = null;
+ // 🧠 SMART MODE SAVE (จำค่าล่าสุดเสมอ)
+ state.smartAddDraft = {
+   price,
+   stock,
+   status,
+   note
+ };
+ await refreshProducts();
+
+ if (continueMode) {
+   // 🔁 ยิงรัว: ล้างเฉพาะ SKU + รูป
+   document.getElementById("addProductId").value = "";
+   document.getElementById("addStock").value = state.smartAddDraft.stock ?? "";
+
+   const img = document.getElementById("addImagePreview");
+   if (img) {
+     img.src = "";
+     img.style.display = "none";
+   }
+
+   document.getElementById("addProductId").focus();
+ } else {
+   closeAddProduct();
+ }
+
+  } catch(err){
+    console.error(err);
+    showToast(err.message || "เกิดข้อผิดพลาด", "error");
+  } finally {
+    safeHideLoading(); // 🔒 สำคัญ: ปิด loading ทุกกรณี
+    state.isSubmitting = false;
+
+    if(btn){
+      btn.disabled = false;
+      btn.textContent = "บันทึกสินค้า";
+    }
+  }
+}
+
+function openAdminProductAction(p){
+  // 🔒 guard
+  if (state.mode !== "admin") return;
+
+  state.selectedProduct = p;
+
+  adminProductActionSheet.innerHTML = `
+    <h3>จัดการสินค้า</h3>
+
+    <div style="
+      font-weight:600;
+      font-size:16px;
+      margin-bottom:4px
+    ">
+      ${p.name}
+    </div>
+
+    <div style="
+      font-size:12px;
+      color:#888;
+      margin-bottom:16px
+    ">
+      รหัสสินค้า: ${p.productId}
+    </div>
+
+    <!-- ✏️ EDIT PRODUCT -->
+    <button class="btn btn-primary"
+      style="width:100%;margin-bottom:10px"
+      onclick="
+        closeAdminProductAction();
+        openProductEdit(state.selectedProduct);
+      ">
+      ✏️ แก้ไขข้อมูลสินค้า
+    </button>
+
+    <!-- 📦 STOCK -->
+    <button class="btn btn-secondary"
+      style="width:100%;margin-bottom:16px"
+      onclick="
+        closeAdminProductAction();
+        openStockAction(state.selectedProduct);
+      ">
+      📦 ปรับสต๊อก
+    </button>
+
+    <!-- ❌ CANCEL -->
+    <button class="btn btn-outline"
+      onclick="closeAdminProductAction()">
+      ยกเลิก
+    </button>
+  `;
+
+  // ✅ เปิดผ่าน Overlay Manager
+  openOverlay(adminProductActionSheet);
+}
+
+function closeAdminProductAction(){
+  closeOverlay(adminProductActionSheet);
+}
+
+function isAdminSessionExpired(expiredAt = state.admin.expiredAt) {
+  // ❗ ไม่มี expiredAt = session invalid ทันที
+  if (!expiredAt) return true;
+
+  return Date.now() > new Date(expiredAt).getTime();
+}  
+
+/* =========================================================
+   🔤 THAI BAHT TEXT CONVERTER
+========================================================= */
+function numberToThaiText(num) {
+  if (isNaN(num)) return "";
+
+  const digit = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
+  const position = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"];
+
+  function convert(n) {
+    let result = "";
+    const str = parseInt(n, 10).toString();
+    const len = str.length;
+
+    for (let i = 0; i < len; i++) {
+      const d = parseInt(str.charAt(i));
+      const pos = len - i - 1;
+
+      if (d === 0) continue;
+
+      if (pos === 0 && d === 1 && len > 1) {
+        result += "เอ็ด";
+      } else if (pos === 1 && d === 2) {
+        result += "ยี่";
+      } else if (pos === 1 && d === 1) {
+        result += "";
+      } else {
+        result += digit[d];
+      }
+
+      result += position[pos];
+    }
+
+    return result;
+  }
+
+  if (num === 0) return "ศูนย์บาทถ้วน";
+
+  return convert(num) + "บาทถ้วน";
+}
+  
+/* ================= EXPORT ORDER PNG (FINAL) ================= */
+function exportOrderPNG() {
+  const order = state.lastOrder;
+  if (!order) return;
+
+  /* ================= A4 CONFIG (FIXED) ================= */
+  const cfg = {
+    width: 794,          // A4 width @96dpi
+    height: 1123,        // 🔥 A4 height fixed
+    padding: 64,
+    titleSize: 32,
+    textSize: 18,
+    lineHeight: 34
+  };
+  /* ================= CANVAS SIZE ================= */
+  const items = Array.isArray(order.items) ? order.items : [];
+
+  const po = order.poNumber
+    ? String(order.poNumber)
+    : "-";
+
+  const canvas = document.createElement("canvas");
+  canvas.width = cfg.width;
+  canvas.height = cfg.height;  // 🔥 FIXED A4
+
+  const ctx = canvas.getContext("2d");
+
+  /* ================= BACKGROUND ================= */
+  ctx.fillStyle = "#f2f2f7";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+/* ================= CARD ================= */
+  ctx.fillStyle = "#ffffff";
+
+  // ✅ Canvas shadow uses token (sync light/dark)
+  const getToken = (name) =>
+    getComputedStyle(document.documentElement)
+      .getPropertyValue(name)
+      .trim();
+
+  const parseShadowToken = (v) => {
+    // expects: "0 10px 30px rgba(0,0,0,.08)" (single shadow)
+    const m = String(v).match(
+      /^\s*(-?\d+(?:\.\d+)?)px?\s+(-?\d+(?:\.\d+)?)px?\s+(\d+(?:\.\d+)?)px?\s+(.+)\s*$/i
+    );
+    if (!m) return null;
+    return {
+      x: Number(m[1]) || 0,
+      y: Number(m[2]) || 0,
+      blur: Number(m[3]) || 0,
+      color: (m[4] || "rgba(0,0,0,.08)").trim()
+    };
+  };
+
+  let canvasShadowRaw =
+    getToken("--shadow-canvas-card") || getToken("--shadow-card");
+
+  // ✅ resolve var(--shadow-*) for custom properties (Safari/Chrome may return literal "var(...)")
+  const varMatch = String(canvasShadowRaw).match(/var\((--[^)]+)\)/);
+  if (varMatch && varMatch[1]) {
+    canvasShadowRaw = getToken(varMatch[1]) || canvasShadowRaw;
+  }
+  const sh = parseShadowToken(canvasShadowRaw);
+  if (sh) {
+    ctx.shadowColor = sh.color;
+    ctx.shadowBlur = sh.blur;
+    ctx.shadowOffsetX = sh.x;
+    ctx.shadowOffsetY = sh.y;
+  } else {
+    // fallback (should rarely happen)
+    ctx.shadowColor = "rgba(0,0,0,0.08)";
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 6;
+  }
+
+  ctx.beginPath();
+
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(8, 8, canvas.width - 16, canvas.height - 16, 18);
+  } else {
+    const x = 8;
+    const y0 = 8;
+    const w = canvas.width - 16;
+    const h = canvas.height - 16;
+    const r = 18;
+
+    ctx.moveTo(x + r, y0);
+    ctx.lineTo(x + w - r, y0);
+    ctx.quadraticCurveTo(x + w, y0, x + w, y0 + r);
+    ctx.lineTo(x + w, y0 + h - r);
+    ctx.quadraticCurveTo(x + w, y0 + h, x + w - r, y0 + h);
+    ctx.lineTo(x + r, y0 + h);
+    ctx.quadraticCurveTo(x, y0 + h, x, y0 + h - r);
+    ctx.lineTo(x, y0 + r);
+    ctx.quadraticCurveTo(x, y0, x + r, y0);
+  }
+
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+
+  /* ================= TEXT ================= */
+  let y = cfg.padding + cfg.lineHeight;
+  ctx.fillStyle = "#000";
+
+  /* ===== TITLE ===== */
+  ctx.font = `700 ${cfg.titleSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.fillText("ใบสั่งซื้อ", cfg.padding, y);
+  y += cfg.lineHeight + 8;
+
+  /* ===== HEADER BASE LINE ===== */
+  const headerTopY = y;
+
+  /* ===== COMPANY BLOCK ===== */
+ctx.font = `700 ${cfg.textSize + 4}px -apple-system`;
+ctx.fillText("ร้านล้อพาณิชย์", cfg.padding, headerTopY);
+
+ctx.fillText(
+   "7/13 หมู่ 5",
+   cfg.padding,
+   headerTopY + cfg.lineHeight
+ );
+ ctx.fillText(
+   "ต.หนองแขม อ.หนองแค",
+   cfg.padding,
+   headerTopY + cfg.lineHeight * 2
+ );
+ ctx.fillText(
+   "จ.สระบุรี 18140",
+   cfg.padding,
+   headerTopY + cfg.lineHeight * 3
+ );
+
+/* ===== DOCUMENT META ===== */
+const rightX = canvas.width - cfg.padding;
+
+  ctx.textAlign = "right";
+  ctx.fillText(`เลขที่: ${order.orderId}`, rightX, headerTopY);
+ ctx.fillText(`PO: ${po}`, rightX, headerTopY + cfg.lineHeight);
+ const docDate = new Date(order.createdAt);
+ ctx.fillText(
+   `วันที่: ${docDate.toLocaleDateString("th-TH")}`,
+   rightX,
+   headerTopY + cfg.lineHeight * 2
+ );
+
+  ctx.textAlign = "left";
+  y = headerTopY + cfg.lineHeight * 5;
+
+
+  /* ===== DIVIDER ===== */
+  ctx.strokeStyle = "#dddddd";
+  ctx.beginPath();
+  ctx.moveTo(cfg.padding, y);
+  ctx.lineTo(canvas.width - cfg.padding, y);
+  ctx.stroke();
+  y += cfg.lineHeight;
+
+/* ================= ITEMS (GRID TABLE) ================= */
+  const tableTopY = y;
+  const rowHeight = 42;
+
+  const col = {
+    no: cfg.padding,
+    name: cfg.padding + 60,
+    qty: canvas.width - cfg.padding - 260,
+    price: canvas.width - cfg.padding - 180,
+    total: canvas.width - cfg.padding - 90
+  };
+
+  ctx.font = `700 ${cfg.textSize}px -apple-system`;
+
+  // HEADER
+  ctx.fillText("ลำดับ", col.no, y);
+  ctx.fillText("รายการสินค้า", col.name, y);
+  ctx.fillText("จำนวน", col.qty, y);
+  ctx.fillText("ราคา", col.price, y);
+  ctx.fillText("รวม", col.total, y);
+
+  y += 16;
+
+  ctx.strokeStyle = "#000";
+  ctx.beginPath();
+  ctx.moveTo(cfg.padding, y);
+  ctx.lineTo(canvas.width - cfg.padding, y);
+  ctx.stroke();
+
+  y += rowHeight - 16;
+
+  ctx.font = `${cfg.textSize}px -apple-system`;
+
+  items.forEach((i, index) => {
+    const total = Number(i.price) * Number(i.qty);
+
+    ctx.fillText(String(index + 1), col.no, y);
+
+    // truncate name (single line grid)
+    let name = `[${i.productId}] ${i.name}`;
+    while (ctx.measureText(name).width > (col.qty - col.name - 20)) {
+      name = name.slice(0, -1);
+    }
+
+    ctx.fillText(name, col.name, y);
+
+    ctx.textAlign = "right";
+    ctx.fillText(String(i.qty), col.qty + 40, y);
+    ctx.fillText(`฿${Number(i.price).toLocaleString()}`, col.price + 60, y);
+    ctx.fillText(`฿${total.toLocaleString()}`, col.total + 80, y);
+    ctx.textAlign = "left";
+
+    // horizontal line
+    ctx.beginPath();
+    ctx.moveTo(cfg.padding, y + 16);
+    ctx.lineTo(canvas.width - cfg.padding, y + 16);
+    ctx.strokeStyle = "#ddd";
+    ctx.stroke();
+
+    y += rowHeight;
+  });
+  
+  /* ===== DIVIDER ===== */
+  y += 4;
+  ctx.strokeStyle = "#dddddd";
+  ctx.beginPath();
+  ctx.moveTo(cfg.padding, y);
+  ctx.lineTo(canvas.width - cfg.padding, y);
+  ctx.stroke();
+  y += cfg.lineHeight;
+
+  /* ================= TOTAL ================= */
+  ctx.font = `700 ${cfg.textSize + 4}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  const safeTotal = Number(order.total) || 0;
+  const totalText = `ยอดรวม: ฿${safeTotal.toLocaleString()}`;
+  const tw = ctx.measureText(totalText).width;
+  ctx.fillText(
+    totalText,
+    canvas.width - cfg.padding - tw,
+    y
+  );
+
+  /* ===== THAI TEXT TOTAL ===== */
+  y += cfg.lineHeight;
+  ctx.font = `${cfg.textSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  const thaiText = `(${numberToThaiText(safeTotal)})`;
+  const thaiWidth = ctx.measureText(thaiText).width;
+  ctx.fillText(
+    thaiText,
+    canvas.width - cfg.padding - thaiWidth,
+    y
+  );
+
+  /* ================= DOWNLOAD (FIXED) ================= */
+  const a = document.createElement("a");
+  a.download = `order-${order.orderId}.png`;
+  a.href = canvas.toDataURL("image/png");
+
+  // 🔴 FIX: ต้อง append เข้า DOM (Mobile Safari / Chrome policy)
+ document.body.appendChild(a);
+ a.click();
+ document.body.removeChild(a);
+}
+
+function exportOrderPrint() {
+  const order = state.lastOrder;
+  if (!order) return;
+
+  const items = Array.isArray(order.items) ? order.items : [];
+
+  const po = order.poNumber
+    ? String(order.poNumber)
+    : "-";
+
+  const today = order.createdAt
+    ? new Date(order.createdAt).toLocaleDateString("th-TH")
+    : new Date().toLocaleDateString("th-TH");
+
+  const total = Number(order.total || 0).toLocaleString();
+
+  const printWindow = window.open("", "_blank");
+
+  printWindow.document.write(`
+    <html>
+    <head>
+      <title>Order ${order.orderId}</title>
+      <style>
+        @page {
+          size: A4;
+          margin: 20mm;
+        }
+
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-size: 14px;
+          color: #111827; /* Dark Accent */
+          margin: 0;
+
+          display: flex;
+          flex-direction: column;
+          min-height: 100vh;
+          }
+
+          .content {
+          flex: 1;
+        }
+
+        .header {
+          display: flex;
+          justify-content: space-between;
+        }
+
+        .section {
+          margin-bottom: 24px;
+        }
+
+        h2 {
+          color: #1E3A8A; /* Navy Blue */
+          margin: 0 0 8px 0;
+        }
+        
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        th, td {
+          border-bottom: 1px solid #E5E7EB; /* Soft Gray */
+          padding: 8px;
+          text-align: left;
+        }
+
+        th {
+          font-weight: 600;
+          background: #F9FAFB; /* very soft header tint */
+          color: #1E3A8A; /* Navy Blue */
+        }
+
+        .total {
+          text-align: right;
+          font-weight: bold;
+          font-size: 16px;
+          margin-top: 16px;
+          color: #111827; /* Dark Accent */ 
+        }
+
+.sign {
+  display: flex;
+  justify-content: space-between;
+  margin-top: auto;   /* 🔥 หัวใจ */
+}
+
+        .sign-block {
+          width: 40%;
+          text-align: center;
+        }
+
+        .line {
+          border-top: 1px solid #E5E7EB; /* Soft Gray */
+          margin-bottom: 8px;
+        }
+
+ .top-meta {
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   font-size: 12px;
+   color: #6B7280;
+   margin-bottom: 12px;
+ }
+
+      </style>
+    </head>
+    <body>
+
+  <div class="top-meta">
+    <div>${new Date().toLocaleString("th-TH", {
+  dateStyle: "short",
+  timeStyle: "short"
+})}
+</div>
+    <div>Order ${order.orderId}</div>
+  </div>
+
+     <div class="content">
+     
+      <div class="header section">
+        <div>
+          <h2>ใบสั่งซื้อ</h2>
+          <div>&nbsp;</div>
+           <div>&nbsp;</div>
+           <div>&nbsp;</div>
+        </div>
+
+        <div>
+          <div>เลขที่: ${order.orderId}</div>
+          <div>PO: ${po}</div>
+          <div>วันที่: ${today}</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>รายการ</th>
+            <th>จำนวน</th>
+            <th>ราคา</th>
+            <th>รวม</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map((i, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>[${esc(i.productId)}] ${esc(i.name)}</td>
+              <td>${i.qty}</td>
+              <td>฿${Number(i.price).toLocaleString()}</td>
+              <td>฿${(i.price * i.qty).toLocaleString()}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+
+<div class="total">
+  ยอดรวม: ฿${total}<br>
+  <span style="font-weight:500; font-size:14px;">
+    (${numberToThaiText(Number(order.total || 0))})
+  </span>
+</div>
+
+</div> <!-- ปิด content -->
+
+      <script>
+        window.onload = function() {
+          window.print();
+          window.onafterprint = function() {
+         
+// 🔥 ปิด confirmSheet อัตโนมัติ (Safe + Clear State)
+    if (window.opener && window.opener.closeOverlay) {
+      const sheet = window.opener.document.getElementById("confirmSheet");
+      if (sheet) {
+        window.opener.closeOverlay(sheet);
+      }
+
+      // 🔴 NEW: clear lastOrder เพื่อกัน reopen state ค้าง
+      if (window.opener.state) {
+        window.opener.state.lastOrder = null;
+      }
+
+      // 🔴 NEW: reset backdrop lock กันค้าง
+      if (window.opener.state?.ui) {
+        window.opener.state.ui.backdropLocked = false;
+      }
+
+      // 🔥 เลื่อนกลับบนสุดอย่างนุ่มนวล
+      window.opener.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    }
+             window.close();
+          };
+        };
+      <\/script>
+
+    </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+}
+  
+function finishAdminAction({ refresh = true } = {}) {
+  // 🔒 ปิดทุก overlay ผ่านศูนย์กลาง (Overlay Manager)
+  document.querySelectorAll(".sheet.show, .side-menu.show")
+    .forEach(el => {
+      closeOverlay(el); // ✅ หัวใจ
+    });
+
+  // ❌ กัน Orders เด้งซ้ำ
+  allowOpenOrders = false;
+  allowOpenStockTimeline = false;
+  allowOpenAddProduct = false;
+
+  // 🔍 RESET SEARCH (กัน filter ค้าง)
+  state.search = "";
+
+  // 🔄 optional refresh สินค้า
+  if (refresh) {
+    refreshProducts();
+  }
+
+  // 🔄 render header ใหม่ (search จะโล่ง)
+  renderHeader();
+}
+
+/* ================= GLOBAL INPUT FOCUS FIX ================= */
+function focusInput(el) {
+  if (!el) return;
+
+  setTimeout(() => {
+    try {
+      el.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    } catch (e) {
+      el.scrollIntoView();
+    }
+  }, 200);
+}
+
+function saveAdminSession({ token, username, expiredAt }) {
+  localStorage.setItem("admin_session", JSON.stringify({
+    token,
+    username,
+    expiredAt
+  }));
+}
+
+function loadAdminSession() {
+  try {
+    return JSON.parse(localStorage.getItem("admin_session"));
+  } catch {
+    return null;
+  }
+}
+
+// ================= STEP A7: SINGLE LOGOUT SOURCE OF TRUTH =================
+function clearAdminSession(){
+  try {
+    // ล้าง storage ที่ใช้ restore
+    localStorage.removeItem("admin_session");
+    localStorage.removeItem("adminSession"); // เผื่อของเก่าที่เคยใช้
+  } catch(e) {}
+
+  // ล้าง state ที่เกี่ยวกับ admin ทั้งหมด
+  state.admin.loggedIn = false;
+  state.admin.user = "";
+  state.admin.token = "";
+  state.admin.expiredAt = "";
+  state.admin.isSubmitting = false;
+}
+
+function exitAdmin(opts = {}){
+  const { silent = false } = opts;
+
+  // 1) ปลดล็อก backdrop / loading เสมอ (กันค้าง)
+  state.ui.backdropLocked = false;
+  safeHideLoading();
+
+  // 2) ปิด overlay/sheet ทุกตัวแบบ force (กัน overlayCount เพี้ยน)
+  const sheets = [
+    mainMenuSheet,
+    adminLoginSheet,
+    adminDashboardSheet,
+    adminStockSheet,
+    adminAddProductSheet,
+    productSheet,
+    adminProductEditSheet,
+    confirmSheet
+  ].filter(Boolean);
+
+  sheets.forEach(el => el.classList.remove("show"));
+  state.ui.overlayCount = 0;
+  backdrop.style.display = "none";
+
+  // 3) ล้าง session (จุดเดียว)
+  clearAdminSession();
+
+  // 4) กลับสู่ viewer mode เสมอ (ตามตัวเลือก A)
+  state.mode = "viewer";
+
+  // 5) เคลียร์ selection/admin draft ที่อาจทำให้หลุด flow
+  state.selectedProduct = null;
+  state.editImageFile = null;
+  state.addImageFile = null;
+
+  // 6) rerender เฉพาะที่จำเป็น (ไม่แตะ flow อื่น)
+  renderHeader();
+  renderProducts();
+  if (typeof renderBadge === "function") renderBadge();
+
+  if (!silent) showToast("ออกจากโหมดแอดมินแล้ว", "info");
+}
+
+// ================= EMERGENCY UI UNLOCK =================
+// ⚠️ DEV / ADMIN USE ONLY
+window.forceUnlockUI = function(){
+  console.warn('[forceUnlockUI] manual reset');
+
+  // reset flags
+  state.isSubmitting = false;
+  state.ui.backdropLocked = false;
+  state.ui.overlayCount =
+    document.querySelectorAll(".sheet.show, .side-menu.show").length;
+  // close all overlays
+  document
+    .querySelectorAll(".sheet.show, .side-menu.show")
+    .forEach(el => el.classList.remove("show"));
+
+  // hide loading overlay
+  const overlay = document.getElementById("loading-overlay");
+  if (overlay) overlay.classList.add("hidden");
+
+  // hide backdrop
+  if (backdrop) backdrop.style.display = "none";
+
+  showToast("รีเซ็ตระบบเรียบร้อย", "info");
+};
+
+async function restoreAdminSessionIfValid() {
+  const restored = loadAdminSession();
+  if (!restored?.token || !restored?.expiredAt) return false;
+
+  // expired guard
+  if (Date.now() > new Date(restored.expiredAt).getTime()) {
+    clearAdminSession();
+    return false;
+  }
+
+  try {
+    // ✅ lightweight validate (POST ให้ตรง backend)
+    const form = new URLSearchParams();
+    form.append("action", "orders");
+    form.append("token", restored.token);
+
+    const res = await fetch(API_URL, {
+      method: "POST",
+      body: form
+    });
+
+    const json = await res.json();
+
+    if (json?.success === true) {
+      state.admin.loggedIn = true;
+      state.admin.user = restored.username || null;
+      state.admin.token = restored.token;
+      state.admin.expiredAt = restored.expiredAt;
+
+      // ❗ ไม่ set state.mode ที่นี่ (กันกระทบ flow)
+      return true;
+    }
+  } catch (e) {
+    console.warn("restore admin failed", e);
+  }
+
+  clearAdminSession();
+  return false;
+}
+  
+/* ================= INIT APP (CLEAN / SAFE) ================= */
+ /* ================= LIQUID HEADER SCROLL EFFECT ================= */
+ let _lastScrollY = 0;
+ let _lastScrollTime = performance.now(); // 🔴 NEW: velocity time base
+ let _headerTicking = false;
+
+// ================= BACK TO TOP =================
+let btnTop = null; // 🔴 must bind after DOM parsed (button is below this <script>)
+const prefersReducedMotion =
+  window.matchMedia &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+window.addEventListener("DOMContentLoaded", () => {
+  btnTop = document.getElementById("btnTop");
+  if (!btnTop) return;
+
+  btnTop.addEventListener("click", () => {
+    if (prefersReducedMotion) {
+      window.scrollTo(0, 0);
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, { passive: true });
+});
+  
+ const VELOCITY_HIDE = 0.6;   // px per ms
+ const VELOCITY_SHOW = -0.6;  // px per ms 
+ const VELOCITY_DEADZONE = 0.05; // 🔴 NEW: jitter guard 
+ 
+ function handleHeaderScroll(){
+   const header = document.getElementById("appHeader");
+   const bar    = document.getElementById("floatingBar");
+   const topBtn = btnTop;
+   
+   const currentY = Math.max(0, window.scrollY); // 🔴 FIX: clamp negative scroll (iOS bounce)
+   const now = performance.now();                       // 🔴 NEW
+   const delta = currentY - (_lastScrollY ?? currentY);
+   const deltaTime = (now - (_lastScrollTime ?? now)) || 16;      // 🔴 NEW
+   const velocity = delta / deltaTime;                 // 🔴 NEW
+
+// 🔴 CHANGED: micro scroll noise guard (แต่ต้อง "โชว์ bar คืน" เมื่อหยุดเลื่อน)
+   if (Math.abs(delta) < 1) {
+     // ✅ FIX: ตอน delta เล็ก = "อย่าเปลี่ยนสถานะซ่อน/โชว์"
+     // ยกเว้นกรณีอยู่บนสุดจริง ๆ ค่อยบังคับให้โชว์
+     if (bar && currentY <= 10) {
+       bar.classList.remove("scroll-hide");
+     }
+     _lastScrollY = currentY;
+     _lastScrollTime = now;
+     _headerTicking = false;
+     return;
+   } 
+   
+if (header){
+    if (currentY > 10) {
+      header.classList.add("scrolled");
+    } else {
+      header.classList.remove("scrolled");
+    }
+  }
+   
+  /* ================= BACK TO TOP SHOW/HIDE ================= */
+  if (topBtn){
+    // ✅ โผล่เมื่อเลื่อนลงพอสมควร และไม่มี overlay เปิดอยู่
+    const shouldShow = currentY > 600 && state.ui.overlayCount === 0;
+    topBtn.classList.toggle("show", shouldShow);
+  }
+
+    /* ================= FLOATING BAR SMART HIDE ================= */
+   if (bar && bar.classList.contains("show")) {
+     // 📍 อยู่บนสุด → แสดงเสมอ
+     if (currentY <= 10) {
+       bar.classList.remove("scroll-hide");
+     }
+     // 🔴 CHANGED: direction-based
+    else if (delta > 0) {
+       // ⬇️ เลื่อนลง = ซ่อน (กันบังเวลาเลือกสินค้าเพิ่ม)
+       bar.classList.add("scroll-hide");
+     }
+    else if (delta < 0) {
+       // ⬆️ เลื่อนขึ้น = โชว์
+       bar.classList.remove("scroll-hide");
+     }
+   }
+   
+   _lastScrollY = currentY;
+   _lastScrollTime = now; // 🔴 NEW
+   _headerTicking = false;
+ }
+
+ window.addEventListener("scroll", () => {
+   
+   if (!_headerTicking) {
+     window.requestAnimationFrame(handleHeaderScroll);
+     _headerTicking = true;
+   }
+ });
+
+ // 🔴 ADD: Smart hide เมื่อ scroll ภายใน .sheet (เพราะ window.scrollY ไม่เปลี่ยน)
+(function bindSheetScrollSmartHide(){
+  const lastTop = new WeakMap(); // เก็บ scrollTop ล่าสุดของแต่ละ sheet
+
+  document.addEventListener("scroll", (e) => {
+    const t = e.target;
+    if (!t) return;
+    const sheetEl = (t.closest && t.closest(".sheet")) || (t.classList && t.classList.contains("sheet") ? t : null);
+    if (!sheetEl) return;
+
+    const bar = document.getElementById("floatingBar");
+    if (!bar || !bar.classList.contains("show")) return;
+
+   const prev = lastTop.get(sheetEl) ?? sheetEl.scrollTop;
+    const d = sheetEl.scrollTop - prev;
+    lastTop.set(sheetEl, sheetEl.scrollTop);
+
+    if (Math.abs(d) < 1) return;
+    if (d > 2) bar.classList.add("scroll-hide");        // ⬇️ เลื่อนลงใน sheet = ซ่อน
+    else if (d < -2) bar.classList.remove("scroll-hide"); // ⬆️ เลื่อนขึ้นใน sheet = โชว์
+  }, true); // capture=true เพื่อจับ element scroll
+})(); 
+
+  
+// ✅ ADD: ensure DOM nodes exist before first render/init
+const __domReady = new Promise((resolve) => {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", resolve, { once: true });
+  } else {
+    resolve();
+  }
+});
+  
+(async () => {
+  try {
+    // ✅ ADD: wait until #floatingBar / #btnTop / etc are in DOM
+    await __domReady;
+    // 🔴 CHANGED (STEP A5): Reload ต้องกลับ Viewer เสมอ (แม้ restore admin สำเร็จ)
+    state.mode = "viewer";
+    state.search = "";
+
+    const restored = loadAdminSession();
+    let adminRestored = false;
+
+    if (
+      restored &&
+      restored.token &&
+      restored.expiredAt &&
+      Date.now() < new Date(restored.expiredAt).getTime()
+    ) {
+      try {
+        // ✅ FIX: ใช้ POST ให้ตรง backend
+        const form = new URLSearchParams();
+        form.append("action", "orders");
+        form.append("token", restored.token);
+
+        const res = await fetch(API_URL, {
+          method: "POST",
+          body: form
+        });
+
+        const json = await res.json();
+
+        if (json && json.success === true) {
+          state.admin.loggedIn = true;
+          state.admin.user = restored.username;
+          state.admin.token = restored.token;
+          state.admin.expiredAt = restored.expiredAt;
+
+          adminRestored = true;
+        }
+      } catch (err) {
+        console.warn("Admin session validation failed", err);
+      }
+    }
+
+    // ❌ invalid / expired
+    if (!adminRestored) {
+      clearAdminSession();
+      // 🔴 CHANGED (STEP A5): mode ถูกบังคับเป็น viewer แล้วด้านบน ไม่ต้อง set ซ้ำ
+    }
+
+    // ✅ RESTORE VIEWER STATE ก่อน render ทุกอย่าง
+    loadCart();
+
+    // ✅ ค่อยโหลด data หลังรู้ mode แล้ว
+    await refreshProducts();
+
+    // ✅ RENDER
+    renderHeader();
+    renderProducts();
+    if (typeof renderBadge === "function") {
+      if (typeof renderBadge === "function") renderBadge();
+    }
+    // 🔴 CHANGED: ให้ floating bar แสดงตาม cart ที่ restore มา
+    if (typeof renderFloatingBar === "function") renderFloatingBar();
+
+  } catch (err) {
+    console.error("[INIT ERROR]", err);
+    showToast("ไม่สามารถโหลดข้อมูลเริ่มต้นได้", "error");
+  } finally {
+    safeHideLoading();
+  }
+})();
+
+  // =========================
+  // 🔍 DEBUG: Floating Bar
+  // (ใช้เฉพาะตรวจปัญหา bar ไหลไปท้ายหน้า)
+  // =========================
+  window.debugBar = function debugBar(){
+    const bar = document.getElementById('floatingBar');
+    if(!bar){ console.warn('[debugBar] #floatingBar not found'); return; }
+
+    const cs = getComputedStyle(bar);
+    const rect = bar.getBoundingClientRect();
+
+    console.log('===== #floatingBar runtime =====');
+    console.table({
+      position: cs.position,
+      bottom: cs.bottom,
+      zIndex: cs.zIndex,
+      transform: cs.transform,
+      opacity: cs.opacity,
+      pointerEvents: cs.pointerEvents,
+      display: cs.display,
+      visibility: cs.visibility,
+      rectTop: Math.round(rect.top),
+      rectBottom: Math.round(rect.bottom),
+      viewportH: window.innerHeight
+    });
+
+    // test fixed-ness
+    const b1 = bar.getBoundingClientRect().bottom;
+    window.scrollBy(0, 240);
+    const b2 = bar.getBoundingClientRect().bottom;
+    window.scrollBy(0, -240);
+    console.log('[debugBar] fixed test diff (should be ~0):', (b2 - b1));
+
+    // detect ancestor transform/filter/perspective
+    let el = bar.parentElement;
+    const chain = [];
+    while(el){
+      const s = getComputedStyle(el);
+      if(s.transform !== 'none' || s.filter !== 'none' || s.perspective !== 'none'){
+        chain.push({
+          node: el.tagName + (el.id?('#'+el.id):'') + (el.className?('.'+String(el.className).replace(/\s+/g,'.')):''),
+          transform: s.transform,
+          filter: s.filter,
+          perspective: s.perspective
+        });
+      }
+      el = el.parentElement;
+    }
+    if(chain.length){
+      console.warn('[debugBar] ancestors with transform/filter/perspective (may break fixed):');
+      console.table(chain);
+    } else {
+      console.log('[debugBar] no transform/filter/perspective ancestors found');
+    }
+
+    // check overlay
+    const p = document.elementFromPoint(Math.min(rect.left+10, window.innerWidth-1), Math.min(rect.top+10, window.innerHeight-1));
+    console.log('[debugBar] elementFromPoint near bar:', p);
+  }
+
+  // =========================
+// 🔍 DEBUG: Trace CSS winners for #floatingBar
+// เป้าหมาย: หา "rule ไหน" ที่ชนะ opacity/transform จริง
+// =========================
+window.traceBarCSS = function traceBarCSS(){
+  const bar = document.getElementById("floatingBar");
+  if (!bar) { console.warn("[traceBarCSS] #floatingBar not found"); return []; }
+
+  const props = ["opacity","transform","pointer-events"];
+  const out = [];
+
+  const tryPushRule = (sheet, rule, ruleIndex, sel) => {
+    const style = rule.style;
+    const hit = {
+      sheet: sheet.href || "[inline <style>]",
+      ruleIndex,
+      selector: sel,
+      cssText: rule.cssText
+    };
+    // เก็บเฉพาะค่าที่เกี่ยวข้อง
+    props.forEach(p => {
+      const v = style.getPropertyValue(p);
+      if (v) {
+        hit[p] = v.trim();
+        hit[p + "_important"] = style.getPropertyPriority(p) === "important";
+      }
+    });
+    // ดันเฉพาะ rule ที่แตะ props จริง
+    if (props.some(p => hit[p])) out.push(hit);
+  };
+
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules;
+    try { rules = sheet.cssRules; } catch(e) { continue; } // cross-origin
+    if (!rules) continue;
+
+    for (let i = 0; i < rules.length; i++) {
+      const r = rules[i];
+      if (!r || !r.selectorText) continue;
+      // รองรับ selector หลายตัวคั่นด้วย comma
+      const sels = r.selectorText.split(",").map(s => s.trim()).filter(Boolean);
+      for (const sel of sels) {
+        try {
+          if (bar.matches(sel)) {
+            tryPushRule(sheet, r, i, sel);
+          }
+        } catch(_) {}
+      }
+    }
+  }
+
+  const cs = getComputedStyle(bar);
+  console.log("===== traceBarCSS =====");
+  console.log("className:", bar.className);
+  console.table({
+    computed_opacity: cs.opacity,
+    computed_transform: cs.transform,
+    computed_pointerEvents: cs.pointerEvents
+  });
+  console.table(out);
+  return out;
+};
+
+// =========================
+// 🔍 DEBUG: Watch class changes แล้ว trace ทันที
+// ใช้: watchBarCSS(); แล้วลองเลื่อน/เปิดปิด sheet
+// =========================
+window.watchBarCSS = function watchBarCSS(){
+  const bar = document.getElementById("floatingBar");
+  if (!bar) { console.warn("[watchBarCSS] #floatingBar not found"); return; }
+  if (bar.__watchingCSS) { console.warn("[watchBarCSS] already watching"); return; }
+  bar.__watchingCSS = true;
+
+  const mo = new MutationObserver(() => {
+    // trace หลัง DOM อัปเดตแล้ว 1 เฟรม (กันอ่านค่าก่อน apply)
+    requestAnimationFrame(() => window.traceBarCSS());
+  });
+  mo.observe(bar, { attributes: true, attributeFilter: ["class","style"] });
+  bar.__watchMO = mo;
+  console.log("✅ watching #floatingBar class/style changes");
+  window.traceBarCSS();
+};
+
+// =========================
+// 🕵️ SPY: ใครเป็นคนแก้ class/style ของ #floatingBar
+// ใช้: spyBar(); แล้วลองเลื่อน/เปิดปิด sheet/เพิ่มของในตะกร้า
+// =========================
+window.spyBar = function spyBar(){
+  const bar = document.getElementById("floatingBar");
+  if (!bar) { console.warn("[spyBar] #floatingBar not found"); return; }
+  if (bar.__spyInstalled) { console.warn("[spyBar] already installed"); return; }
+  bar.__spyInstalled = true;
+
+  // 1) spy classList.add/remove/toggle
+  const cl = bar.classList;
+  ["add","remove","toggle"].forEach((m) => {
+    const orig = cl[m].bind(cl);
+    cl[m] = (...args) => {
+      console.groupCollapsed(`🧩 [spyBar] classList.${m}(${args.join(", ")})  | before="${bar.className}"`);
+      console.trace();
+      const r = orig(...args);
+      console.log(`after="${bar.className}"`);
+      console.groupEnd();
+      return r;
+    };
+  });
+
+  // 2) spy style attribute changes (รวมถึง bar.style.opacity/transform ที่ไปลงเป็น inline)
+  const mo = new MutationObserver((list) => {
+    for (const it of list) {
+      if (it.type === "attributes" && it.attributeName === "style") {
+        console.groupCollapsed(`🎨 [spyBar] style changed: ${bar.getAttribute("style") || "(empty)"}`);
+        console.trace();
+        console.groupEnd();
+      }
+    }
+  });
+  mo.observe(bar, { attributes: true, attributeFilter: ["style"] });
+  bar.__spyMO = mo;
+
+  console.log("✅ spyBar installed. Now reproduce the bug.");
+};
+
+window.unspyBar = function unspyBar(){
+  const bar = document.getElementById("floatingBar");
+  if (!bar) return;
+  if (bar.__spyMO) bar.__spyMO.disconnect();
+  bar.__spyMO = null;
+  bar.__spyInstalled = false;
+  console.log("🛑 spyBar removed (note: classList methods won't auto-restore after override)");
+};  
+
+window.unwatchBarCSS = function unwatchBarCSS(){
+  const bar = document.getElementById("floatingBar");
+  if (!bar || !bar.__watchMO) return;
+  bar.__watchMO.disconnect();
+  bar.__watchMO = null;
+  bar.__watchingCSS = false;
+  console.log("🛑 stop watching #floatingBar");
+};
+
+// =========================
+// 🔍 DEBUG: Force test show/hide (พิสูจน์ cascade)
+// ใช้: testBarHide(); แล้วดู console + traceBarCSS
+// =========================
+window.testBarHide = function testBarHide(){
+  const bar = document.getElementById("floatingBar");
+  if (!bar) { console.warn("[testBarHide] #floatingBar not found"); return; }
+
+  bar.className = "show scroll-hide";
+  requestAnimationFrame(() => {
+    const cs1 = getComputedStyle(bar);
+    console.log("[testBarHide] show+scroll-hide => opacity:", cs1.opacity, "transform:", cs1.transform);
+    window.traceBarCSS();
+
+    bar.className = "show";
+    requestAnimationFrame(() => {
+      const cs2 = getComputedStyle(bar);
+      console.log("[testBarHide] show => opacity:", cs2.opacity, "transform:", cs2.transform);
+      window.traceBarCSS();
+    });
+  });
+};  
+ 
+</script>
+  
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- Floating Bottom Bar -->
+<div id="floatingBar"></div> 
+
+<!-- Back to Top -->
+<button id="btnTop" class="btnTop" type="button" aria-label="กลับขึ้นด้านบน" title="กลับขึ้นด้านบน">
+  ↑
+</button>  
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="hidden">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div id="loading-text">กำลังดำเนินการ...</div>
+  </div>
+</div>
+
+  
+</body>
+</html>
