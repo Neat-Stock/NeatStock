@@ -312,21 +312,163 @@ function currentVrichQty(row, column) {
   return value === null ? "" : value;
 }
 
+
+/* =========================================================
+   vRich Stock Update Note
+   ตัวอย่างผลลัพธ์:
+
+   จำนวน 4 | 05/10/69 |
+   1 ร้านพี่เพชร (จ่ายโชว์ JST-6672)
+   23/4/69 จูนตามระบบ JST
+
+   - เพิ่มหมายเหตุใหม่ไว้ด้านบน
+   - ไม่ลบหมายเหตุเก่า
+   - ใช้จำนวนใหม่ที่กำลังอัปเข้า vRich
+   - วันที่เป็น พ.ศ. DD/MM/YY
+   - ใช้เวลา Asia/Bangkok
+   - ป้องกันการเพิ่มบรรทัดเดียวกันซ้ำ
+   ========================================================= */
+
+function formatThaiShortDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Bangkok",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).formatToParts(date);
+
+  const day =
+    parts.find((part) => part.type === "day")?.value || "";
+
+  const month =
+    parts.find((part) => part.type === "month")?.value || "";
+
+  const yearAD = Number(
+    parts.find((part) => part.type === "year")?.value || 0
+  );
+
+  const yearBE = yearAD + 543;
+  const yearBE2 = String(yearBE).slice(-2);
+
+  return `${day}/${month}/${yearBE2}`;
+}
+
+
+function normalizeNoteLine(value) {
+  return String(value ?? "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+
+function prependStockUpdateNote(oldNote, newQty, dateText) {
+  const newLine = `จำนวน ${newQty} | ${dateText} |`;
+
+  const oldText =
+    oldNote == null
+      ? ""
+      : String(oldNote)
+          .replace(/\r\n/g, "\n")
+          .replace(/\r/g, "\n");
+
+  const oldTrimmed = oldText.trim();
+
+  // ไม่มีหมายเหตุเก่า
+  if (!oldTrimmed) {
+    return newLine;
+  }
+
+  // ตรวจบรรทัดแรก ป้องกันการกดประมวลผลซ้ำ
+  // แล้วเพิ่ม "จำนวน X | วันที่ |" ซ้ำอีกครั้ง
+  const firstOldLine = oldTrimmed.split("\n")[0];
+
+  if (
+    normalizeNoteLine(firstOldLine) ===
+    normalizeNoteLine(newLine)
+  ) {
+    return oldText;
+  }
+
+  // หมายเหตุใหม่อยู่ด้านบน
+  // หมายเหตุเดิมทั้งหมดอยู่ด้านล่าง
+  return `${newLine}\n${oldText}`;
+}
+
+
 function processData() {
-  if (!state.tables) throw new Error("กรุณาตรวจสอบไฟล์ก่อนประมวลผล");
+  if (!state.tables) {
+    throw new Error("กรุณาตรวจสอบไฟล์ก่อนประมวลผล");
+  }
+
   const config = getConfig();
   const { vrich, jst, combo, target } = state.tables;
 
-  requireColumns(vrich, [config.vrichMatchColumn, config.vrichQtyColumn], "vRich");
-  requireColumns(jst, [config.jstMatchColumn, config.jstAvailableQtyColumn], "JST Item");
-  requireColumns(combo, [config.comboCodeColumn, config.comboComponentColumn, config.comboRequiredQtyColumn], "JST Combo");
-  requireColumns(target, [config.targetCodeColumn], "ไฟล์รหัสที่ต้องการปรับ");
+  requireColumns(
+    vrich,
+    [config.vrichMatchColumn, config.vrichQtyColumn],
+    "vRich"
+  );
 
-  const vrichIndex = StockEngine.buildIndex(vrich.rows, config.vrichMatchColumn);
-  const jstIndex = StockEngine.buildIndex(jst.rows, config.jstMatchColumn);
-  const comboMap = StockEngine.buildComboMap(combo.rows, config);
+  requireColumns(
+    jst,
+    [config.jstMatchColumn, config.jstAvailableQtyColumn],
+    "JST Item"
+  );
+
+  requireColumns(
+    combo,
+    [
+      config.comboCodeColumn,
+      config.comboComponentColumn,
+      config.comboRequiredQtyColumn,
+    ],
+    "JST Combo"
+  );
+
+  requireColumns(
+    target,
+    [config.targetCodeColumn],
+    "ไฟล์รหัสที่ต้องการปรับ"
+  );
+
+
+  /* ---------------------------------------------------------
+     หมายเหตุ vRich
+     --------------------------------------------------------- */
+
+  const vrichNoteColumn = "หมายเหตุ";
+
+  // วันที่เดียวกันทั้งรอบการประมวลผล
+  const runDateText = formatThaiShortDate();
+
+
+  /* ---------------------------------------------------------
+     สร้าง Index
+     --------------------------------------------------------- */
+
+  const vrichIndex = StockEngine.buildIndex(
+    vrich.rows,
+    config.vrichMatchColumn
+  );
+
+  const jstIndex = StockEngine.buildIndex(
+    jst.rows,
+    config.jstMatchColumn
+  );
+
+  const comboMap = StockEngine.buildComboMap(
+    combo.rows,
+    config
+  );
+
   const comboCodeSet = new Set(comboMap.keys());
   const jstCodeSet = new Set(jstIndex.keys());
+
+
+  /* ---------------------------------------------------------
+     Scope / Family Expansion
+     --------------------------------------------------------- */
 
   const scope = StockEngine.expandTargets(
     target.rows,
@@ -335,16 +477,44 @@ function processData() {
     [jstCodeSet, comboCodeSet],
     config.familyExpansionEnabled
   );
+
   const outputScope = scope.outputs;
-  const outputScopeSet = new Set(outputScope.map((item) => item.code));
-  const duplicateVrich = duplicateCodes(vrichIndex, outputScope);
-  const duplicateVrichSet = new Set(duplicateVrich.map((item) => item.code));
-  const componentUsage = StockEngine.buildActiveComponentUsage(
-    comboMap,
-    vrichIndex,
-    config.vrichQtyColumn,
-    outputScopeSet
+
+  const outputScopeSet = new Set(
+    outputScope.map((item) => item.code)
   );
+
+
+  /* ---------------------------------------------------------
+     Duplicate Check
+     --------------------------------------------------------- */
+
+  const duplicateVrich = duplicateCodes(
+    vrichIndex,
+    outputScope
+  );
+
+  const duplicateVrichSet = new Set(
+    duplicateVrich.map((item) => item.code)
+  );
+
+
+  /* ---------------------------------------------------------
+     Combo Component Usage
+     --------------------------------------------------------- */
+
+  const componentUsage =
+    StockEngine.buildActiveComponentUsage(
+      comboMap,
+      vrichIndex,
+      config.vrichQtyColumn,
+      outputScopeSet
+    );
+
+
+  /* ---------------------------------------------------------
+     Result Containers
+     --------------------------------------------------------- */
 
   const updateRows = [];
   const auditRows = [];
@@ -353,81 +523,324 @@ function processData() {
   const directUpdated = [];
   const comboUpdated = [];
 
+
+  /* ---------------------------------------------------------
+     Process แต่ละ SKU ใน Output Scope
+     --------------------------------------------------------- */
+
   for (const targetItem of outputScope) {
     const code = targetItem.code;
-    const vrichRows = vrichIndex.get(code) || [];
-    const excludedAtScopeCheck = state.excludedCodes.has(code);
+
+    const vrichRows =
+      vrichIndex.get(code) || [];
+
+    const excludedAtScopeCheck =
+      state.excludedCodes.has(code);
+
+
+    /* -------------------------------------------------------
+       ไม่พบใน vRich
+       ------------------------------------------------------- */
+
     if (!vrichRows.length) {
       if (!excludedAtScopeCheck) {
-        issues.push({ code, type: "MISSING_VRICH", message: "อยู่ใน Scope แต่ไม่พบใน vRich", source: "SCOPE", inputCodes: targetItem.inputCodes });
+        issues.push({
+          code,
+          type: "MISSING_VRICH",
+          message: "อยู่ใน Scope แต่ไม่พบใน vRich",
+          source: "SCOPE",
+          inputCodes: targetItem.inputCodes,
+        });
       }
-      auditRows.push(makeAuditRow({ code, targetItem, status: excludedAtScopeCheck ? "EXCLUDED_MISSING_VRICH" : "MISSING_VRICH", source: "-", message: "ไม่พบใน vRich" }));
-      continue;
-    }
-    if (vrichRows.length !== 1 || duplicateVrichSet.has(code)) {
-      if (!excludedAtScopeCheck) {
-        issues.push({ code, type: "DUPLICATE_VRICH", message: `พบรหัสซ้ำใน vRich ${vrichRows.length} แถว`, source: "vRich", inputCodes: targetItem.inputCodes });
-      }
-      auditRows.push(makeAuditRow({ code, targetItem, status: excludedAtScopeCheck ? "EXCLUDED_DUPLICATE_VRICH" : "DUPLICATE_VRICH", source: "vRich", message: `ซ้ำ ${vrichRows.length} แถว` }));
+
+      auditRows.push(
+        makeAuditRow({
+          code,
+          targetItem,
+          status: excludedAtScopeCheck
+            ? "EXCLUDED_MISSING_VRICH"
+            : "MISSING_VRICH",
+          source: "-",
+          message: "ไม่พบใน vRich",
+        })
+      );
+
       continue;
     }
 
-    const stock = StockEngine.resolveStockForCode({
-      code,
-      jstIndex,
-      comboMap,
-      componentUsage,
-      jstAvailableColumn: config.jstAvailableQtyColumn,
-      jstPhysicalColumn: config.jstPhysicalQtyColumn,
-      sharedPolicy: config.sharedComboPolicy,
-    });
+
+    /* -------------------------------------------------------
+       Duplicate vRich
+       ------------------------------------------------------- */
+
+    if (
+      vrichRows.length !== 1 ||
+      duplicateVrichSet.has(code)
+    ) {
+      if (!excludedAtScopeCheck) {
+        issues.push({
+          code,
+          type: "DUPLICATE_VRICH",
+          message: `พบรหัสซ้ำใน vRich ${vrichRows.length} แถว`,
+          source: "vRich",
+          inputCodes: targetItem.inputCodes,
+        });
+      }
+
+      auditRows.push(
+        makeAuditRow({
+          code,
+          targetItem,
+          status: excludedAtScopeCheck
+            ? "EXCLUDED_DUPLICATE_VRICH"
+            : "DUPLICATE_VRICH",
+          source: "vRich",
+          message: `ซ้ำ ${vrichRows.length} แถว`,
+        })
+      );
+
+      continue;
+    }
+
+
+    /* -------------------------------------------------------
+       Resolve Stock
+       ------------------------------------------------------- */
+
+    const stock =
+      StockEngine.resolveStockForCode({
+        code,
+        jstIndex,
+        comboMap,
+        componentUsage,
+        jstAvailableColumn:
+          config.jstAvailableQtyColumn,
+        jstPhysicalColumn:
+          config.jstPhysicalQtyColumn,
+        sharedPolicy:
+          config.sharedComboPolicy,
+      });
+
 
     const vrichRow = vrichRows[0];
-    const excluded = state.excludedCodes.has(code);
+
+    const excluded =
+      state.excludedCodes.has(code);
+
+
     const commonAudit = {
       code,
       targetItem,
       source: stock.source,
-      oldQty: currentVrichQty(vrichRow, config.vrichQtyColumn),
-      newQty: stock.quantity ?? "",
-      physicalRaw: stock.physicalRaw ?? "",
-      availableRaw: stock.availableRaw ?? "",
-      dependencies: stock.dependencies || [],
-      warnings: stock.warnings || [],
-      message: stock.message || "",
+
+      oldQty: currentVrichQty(
+        vrichRow,
+        config.vrichQtyColumn
+      ),
+
+      newQty:
+        stock.quantity ?? "",
+
+      physicalRaw:
+        stock.physicalRaw ?? "",
+
+      availableRaw:
+        stock.availableRaw ?? "",
+
+      dependencies:
+        stock.dependencies || [],
+
+      warnings:
+        stock.warnings || [],
+
+      message:
+        stock.message || "",
     };
+
+
+    /* -------------------------------------------------------
+       Stock Engine แจ้งปัญหา
+       ------------------------------------------------------- */
 
     if (stock.status !== "OK") {
       if (!excluded) {
-        issues.push({ code, type: stock.status, message: stock.message || stock.status, source: stock.source, inputCodes: targetItem.inputCodes });
+        issues.push({
+          code,
+          type: stock.status,
+          message:
+            stock.message || stock.status,
+          source: stock.source,
+          inputCodes:
+            targetItem.inputCodes,
+        });
       }
-      auditRows.push(makeAuditRow({ ...commonAudit, status: excluded ? `EXCLUDED_${stock.status}` : stock.status }));
+
+      auditRows.push(
+        makeAuditRow({
+          ...commonAudit,
+          status: excluded
+            ? `EXCLUDED_${stock.status}`
+            : stock.status,
+        })
+      );
+
       continue;
     }
+
+
+    /* -------------------------------------------------------
+       User Exclusion
+       ------------------------------------------------------- */
 
     if (excluded) {
-      auditRows.push(makeAuditRow({ ...commonAudit, status: "EXCLUDED_BY_USER" }));
+      auditRows.push(
+        makeAuditRow({
+          ...commonAudit,
+          status: "EXCLUDED_BY_USER",
+        })
+      );
+
       continue;
     }
 
+
+    /* =======================================================
+       สร้างแถวใหม่สำหรับ vRich
+       ======================================================= */
+
     const outputRow = {};
-    for (const header of vrich.headers) outputRow[header] = vrichRow[header];
-    outputRow[config.vrichQtyColumn] = stock.quantity;
+
+    // Copy ข้อมูลเดิมทั้งหมดก่อน
+    for (const header of vrich.headers) {
+      outputRow[header] =
+        vrichRow[header];
+    }
+
+
+    /* -------------------------------------------------------
+       Update จำนวน
+       ------------------------------------------------------- */
+
+    outputRow[
+      config.vrichQtyColumn
+    ] = stock.quantity;
+
+
+    /* -------------------------------------------------------
+       Update หมายเหตุ
+
+       ตัวอย่าง:
+       จำนวน 4 | 05/10/69 |
+       <หมายเหตุเดิม>
+       ------------------------------------------------------- */
+
+    if (vrich.headers.includes(vrichNoteColumn)) {
+      outputRow[vrichNoteColumn] =
+        prependStockUpdateNote(
+          vrichRow[vrichNoteColumn],
+          stock.quantity,
+          runDateText
+        );
+    }
+
+
+    /* -------------------------------------------------------
+       เพิ่มเข้า Import
+       ------------------------------------------------------- */
+
     updateRows.push(outputRow);
-    if (stock.source === "COMBO") comboUpdated.push(code);
-    else directUpdated.push(code);
-    if ((stock.warnings || []).some((item) => /ติดลบ/.test(item))) negativeAvailable.push({ code, warnings: stock.warnings });
-    auditRows.push(makeAuditRow({ ...commonAudit, status: "OK" }));
+
+
+    /* -------------------------------------------------------
+       Count Direct / Combo
+       ------------------------------------------------------- */
+
+    if (stock.source === "COMBO") {
+      comboUpdated.push(code);
+    } else {
+      directUpdated.push(code);
+    }
+
+
+    /* -------------------------------------------------------
+       Negative Available Warning
+       ------------------------------------------------------- */
+
+    if (
+      (stock.warnings || []).some(
+        (item) => /ติดลบ/.test(item)
+      )
+    ) {
+      negativeAvailable.push({
+        code,
+        warnings: stock.warnings,
+      });
+    }
+
+
+    /* -------------------------------------------------------
+       Audit
+       ------------------------------------------------------- */
+
+    auditRows.push(
+      makeAuditRow({
+        ...commonAudit,
+        status: "OK",
+      })
+    );
   }
 
-  const activeIssues = issues.filter((item) => !state.excludedCodes.has(item.code));
-  const excluded = [...state.excludedCodes].filter((code) => outputScopeSet.has(code));
+
+  /* ---------------------------------------------------------
+     Active Issues
+     --------------------------------------------------------- */
+
+  const activeIssues =
+    issues.filter(
+      (item) =>
+        !state.excludedCodes.has(item.code)
+    );
+
+
+  const excluded =
+    [...state.excludedCodes].filter(
+      (code) =>
+        outputScopeSet.has(code)
+    );
+
+
+  /* ---------------------------------------------------------
+     Final Status
+     --------------------------------------------------------- */
 
   let status = "PASS";
-  if (activeIssues.some((item) => item.type.includes("DUPLICATE"))) status = "FAIL_DUPLICATE";
-  else if (activeIssues.some((item) => item.type === "MISSING_VRICH" || item.type === "MISSING_JST" || item.type === "MISSING_COMPONENT")) status = "FAIL";
-  else if (activeIssues.length) status = "BLOCKED";
-  else if (excluded.length) status = "PASS_WITH_EXCLUSION";
+
+  if (
+    activeIssues.some(
+      (item) =>
+        item.type.includes("DUPLICATE")
+    )
+  ) {
+    status = "FAIL_DUPLICATE";
+  } else if (
+    activeIssues.some(
+      (item) =>
+        item.type === "MISSING_VRICH" ||
+        item.type === "MISSING_JST" ||
+        item.type === "MISSING_COMPONENT"
+    )
+  ) {
+    status = "FAIL";
+  } else if (activeIssues.length) {
+    status = "BLOCKED";
+  } else if (excluded.length) {
+    status = "PASS_WITH_EXCLUSION";
+  }
+
+
+  /* ---------------------------------------------------------
+     Save Result
+     --------------------------------------------------------- */
 
   state.result = {
     config,
@@ -449,15 +862,28 @@ function processData() {
     status,
   };
 
+
+  /* ---------------------------------------------------------
+     Render
+     --------------------------------------------------------- */
+
   renderSummary();
   renderExpansions();
   renderIssues();
+
   buildDownloads();
   renderDownloads();
+
   setRunStatus(status);
+
   setStatus(
     STATUS_LABELS[status] || status,
-    status === "PASS" || status === "PASS_WITH_EXCLUSION" ? "ok" : status === "BLOCKED" ? "warn" : "danger"
+    status === "PASS" ||
+    status === "PASS_WITH_EXCLUSION"
+      ? "ok"
+      : status === "BLOCKED"
+      ? "warn"
+      : "danger"
   );
 }
 
