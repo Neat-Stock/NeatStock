@@ -932,6 +932,13 @@ function renderSummary() {
     .join("");
 }
 
+function expansionModeLabel(resolution) {
+  if (resolution?.mode !== "family") return "EXACT";
+  if (resolution.familyType === "shoe") return "FAMILY รองเท้า";
+  if (resolution.familyType === "apparel") return "FAMILY เสื้อผ้า";
+  return "FAMILY";
+}
+
 function renderExpansions() {
   const result = state.result;
   if (!result) {
@@ -951,7 +958,7 @@ function renderExpansions() {
         ${rows.map((item) => `
           <tr>
             <td>${escapeHtml(item.inputCode)}</td>
-            <td>${item.resolution.mode === "family" ? "FAMILY" : "EXACT"}</td>
+            <td>${escapeHtml(expansionModeLabel(item.resolution))}</td>
             <td>${escapeHtml(item.resolution.base || "-")}</td>
             <td>${escapeHtml(item.outputCodes.join(", "))}</td>
           </tr>
@@ -1041,7 +1048,7 @@ function buildDownloads() {
 
   const expansionRows = result.scope.expansions.map((item) => ({
     "Input": item.inputCode,
-    "โหมด": item.resolution.mode,
+    "โหมด": expansionModeLabel(item.resolution),
     "Family": item.resolution.base || "",
     "Output Scope": item.outputCodes.join(", "),
     "หมายเหตุ": item.resolution.reason || "",

@@ -6,6 +6,31 @@
     "XXXXXL", "XXXXL", "XXXL", "XXL", "XL", "XS", "S", "M", "L"
   ];
   const SIZE_SUFFIX_SET = new Set(SIZE_SUFFIXES);
+  const SHOE_SIZES = ["36", "37", "38", "39", "40", "41", "42", "43", "44", "45"];
+  const SHOE_SIZE_SET = new Set(SHOE_SIZES);
+
+  // Positive and negative evidence keep numeric clothing sizes from being
+  // mistaken for shoe families. The matching is intentionally conservative:
+  // if a row cannot be confirmed as footwear, the system falls back to EXACT.
+  const SHOE_POSITIVE_PATTERN = new RegExp(
+    [
+      "รองเท้า",
+      "SHOES?", "SANDALS?", "SNEAKERS?", "SLIDES?", "CLOGS?", "BOOTS?",
+      "LOAFERS?", "HEELS?", "FLIP\\s*-?\\s*FLOPS?", "SLIPPERS?", "MULES?",
+      "TRAINERS?", "ESPADRILLES?", "SLINGBACK", "PUMPS?", "FOOTWEAR",
+      "BIRKENSTOCK", "CROCS", "SABOT", "BALLERINA", "MARY\\s+JANE",
+      "AIR\\s+ZOOM", "NEW\\s+BALANCE"
+    ].join("|"),
+    "iu"
+  );
+  const SHOE_NEGATIVE_PATTERN = new RegExp(
+    [
+      "กางเกง", "เสื้อ", "กระโปรง", "แจ็คเก็ต", "ชุดเดรส",
+      "JACKETS?", "JEANS?", "TROUSERS?", "PANTS?", "DENIM",
+      "เอว", "สะโพก", "สพ\\.?", "อก\\s*\\d"
+    ].join("|"),
+    "iu"
+  );
 
   function normalizeCode(value) {
     if (value === null || value === undefined) return "";
@@ -65,6 +90,226 @@
     return map;
   }
 
+  function normalizeHeaderName(value) {
+    return String(value ?? "")
+      .replace(/\ufeff/g, "")
+      .replace(/\u00a0/g, " ")
+      .replace(/[\s_\-]+/g, "")
+      .trim()
+      .toUpperCase();
+  }
+
+  function isDescriptionHeader(header) {
+    const normalized = normalizeHeaderName(header);
+    return (
+      normalized.includes("รายละเอียด") ||
+      normalized.includes("ชื่อสินค้า") ||
+      normalized === "ชื่อ" ||
+      normalized.includes("DESCRIPTION") ||
+      normalized.includes("PRODUCTNAME") ||
+      normalized.includes("ITEMNAME")
+    );
+  }
+
+  function isShoeContextHeader(header) {
+    const normalized = normalizeHeaderName(header);
+    return (
+      isDescriptionHeader(header) ||
+      normalized.includes("ประเภทสินค้า") ||
+      normalized.includes("กลุ่มสินค้า") ||
+      normalized.includes("หมวดหมู่") ||
+      normalized.includes("CATEGORY") ||
+      normalized.includes("PRODUCTTYPE")
+    );
+  }
+
+  function isStockCodeHeader(header) {
+    const normalized = normalizeHeaderName(header);
+    return (
+      normalized.includes("รหัสสต็อก") ||
+      normalized.includes("รหัสสต๊อก") ||
+      normalized.includes("รหัสสต็อค") ||
+      normalized.includes("รหัสสต๊อค") ||
+      normalized.includes("STOCKCODE") ||
+      normalized.includes("STOCKSKU")
+    );
+  }
+
+  function isExplicitSizeHeader(header) {
+    const normalized = normalizeHeaderName(header);
+    return ["ไซส์", "ไซซ์", "ขนาด", "SIZE", "SHOESIZE"].includes(normalized);
+  }
+
+  function valuesForHeaders(row, matcher) {
+    const values = [];
+    for (const [header, value] of Object.entries(row || {})) {
+      if (!matcher(header)) continue;
+      const text = String(value ?? "").trim();
+      if (text) values.push(text);
+    }
+    return values;
+  }
+
+  function parseShoeSizedCode(value) {
+    const code = normalizeCode(value);
+    const match = code.match(/^(.*?)(3[6-9]|4[0-5])$/u);
+    if (!match) return null;
+    const base = match[1];
+    const size = match[2];
+    if (!SHOE_SIZE_SET.has(size)) return null;
+    // Numeric-only identifiers are too risky to expand automatically.
+    if (!base || !/[A-Zก-๙]/iu.test(base)) return null;
+    return { code, base, size };
+  }
+
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function shoeSizeMarkerPattern(size, global = false) {
+    const escaped = escapeRegExp(size);
+    return new RegExp(
+      `(?:\\(|\\[)?\\s*(?:SIZE|ไซส์|ไซซ์|ไซส|เบอร์)\\s*[:#]?\\s*${escaped}(?:\\.5)?` +
+        `(?!\\s*[-–]\\s*\\d)\\s*(?:\\)|\\])?`,
+      global ? "giu" : "iu"
+    );
+  }
+
+  function normalizeComparableText(value) {
+    let text = String(value ?? "");
+    if (typeof text.normalize === "function") text = text.normalize("NFKC");
+    return text
+      .replace(/&NBSP;?/giu, " ")
+      .replace(/\u00a0/g, " ")
+      .replace(/[\ufeff\u200b\u200c\u200d\u2060]/g, "")
+      .toUpperCase()
+      .replace(/[^\p{L}\p{N}]+/gu, "")
+      .trim();
+  }
+
+  function descriptionCore(text, size) {
+    const pattern = shoeSizeMarkerPattern(size, true);
+    if (!pattern.test(String(text ?? ""))) return "";
+    pattern.lastIndex = 0;
+    const withoutSize = String(text ?? "").replace(pattern, " ");
+    return normalizeComparableText(withoutSize);
+  }
+
+  function diceSimilarity(left, right) {
+    const a = normalizeComparableText(left);
+    const b = normalizeComparableText(right);
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    if (a.length < 2 || b.length < 2) return 0;
+
+    const counts = new Map();
+    for (let index = 0; index < a.length - 1; index += 1) {
+      const pair = a.slice(index, index + 2);
+      counts.set(pair, (counts.get(pair) || 0) + 1);
+    }
+
+    let intersection = 0;
+    for (let index = 0; index < b.length - 1; index += 1) {
+      const pair = b.slice(index, index + 2);
+      const count = counts.get(pair) || 0;
+      if (!count) continue;
+      intersection += 1;
+      counts.set(pair, count - 1);
+    }
+
+    return (2 * intersection) / (a.length - 1 + b.length - 1);
+  }
+
+  function compactCode(value) {
+    return normalizeCode(value).replace(/[^A-Z0-9ก-๙]+/giu, "");
+  }
+
+  function hasStructuredStockCode(row, base, size, saleCode) {
+    const compactSale = compactCode(saleCode);
+    const compactBase = compactCode(base);
+    for (const stockCode of valuesForHeaders(row, isStockCodeHeader)) {
+      const normalized = normalizeCode(stockCode);
+      const compactStock = compactCode(normalized);
+      if (compactStock !== compactSale) continue;
+
+      const separated = normalized.match(/^(.*?)[\s_\-]+(3[6-9]|4[0-5])$/u);
+      if (!separated || separated[2] !== size) continue;
+      if (compactCode(separated[1]) === compactBase) return true;
+    }
+    return false;
+  }
+
+  function explicitSizeMatches(row, size) {
+    for (const value of valuesForHeaders(row, isExplicitSizeHeader)) {
+      const number = toFiniteNumber(value);
+      if (number === null) continue;
+      if (Math.floor(number) === Number(size) && number < Number(size) + 1) return true;
+    }
+    return false;
+  }
+
+  function shoeEvidenceForRow(row, codeInfo) {
+    const contextTexts = valuesForHeaders(row, isShoeContextHeader);
+    const descriptionTexts = valuesForHeaders(row, isDescriptionHeader);
+    const context = contextTexts.join(" ");
+    const positive = SHOE_POSITIVE_PATTERN.test(context);
+    const negative = SHOE_NEGATIVE_PATTERN.test(context);
+    const markerTexts = descriptionTexts.filter((text) => shoeSizeMarkerPattern(codeInfo.size).test(text));
+    const markerMatch = markerTexts.length > 0;
+    const sizeColumnMatch = explicitSizeMatches(row, codeInfo.size);
+    const structuredStock = hasStructuredStockCode(row, codeInfo.base, codeInfo.size, codeInfo.code);
+    const core = markerTexts.map((text) => descriptionCore(text, codeInfo.size)).find(Boolean) || "";
+
+    let classification = "unknown";
+    if (negative) classification = "non_shoe";
+    else if (positive) classification = "shoe";
+
+    return {
+      markerMatch,
+      sizeColumnMatch,
+      structuredStock,
+      classification,
+      core,
+      validSizeEvidence: markerMatch || sizeColumnMatch,
+    };
+  }
+
+  function bestShoeEvidence(rows, codeInfo, reference = null) {
+    const evidence = (rows || [])
+      .map((row) => shoeEvidenceForRow(row, codeInfo))
+      .filter((item) => item.validSizeEvidence && item.classification !== "non_shoe");
+
+    if (!evidence.length) return null;
+
+    const ranked = evidence
+      .map((item) => {
+        const similarity = reference && item.core && reference.core
+          ? diceSimilarity(reference.core, item.core)
+          : item.core ? 1 : 0;
+        const score =
+          (item.classification === "shoe" ? 100 : 0) +
+          (item.structuredStock ? 20 : 0) +
+          (item.markerMatch ? 10 : 0) +
+          similarity;
+        return { ...item, similarity, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    if (!reference) return ranked[0];
+
+    return ranked.find((item) => {
+      if (item.classification === "unknown" && !item.structuredStock) return false;
+      if (reference.core && item.core) {
+        if (item.similarity >= 0.88) return true;
+        // Structured stock codes are strong supporting evidence, but still
+        // require the product descriptions to be recognizably related.
+        if (reference.structuredStock && item.structuredStock && item.similarity >= 0.72) return true;
+        return false;
+      }
+      return reference.structuredStock && item.structuredStock;
+    }) || null;
+  }
+
   function familyMembersForBase(base, vrichIndex) {
     const members = [];
     for (const code of vrichIndex.keys()) {
@@ -75,7 +320,7 @@
     return [...new Set(members)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }
 
-  function resolveFamily(code, vrichIndex, supportSets = []) {
+  function resolveApparelFamily(code, vrichIndex, supportSets = []) {
     const normalized = normalizeCode(code);
     const candidates = [];
     for (const suffix of SIZE_SUFFIXES) {
@@ -90,14 +335,103 @@
       }
       candidates.push({ base, suffix, members, support, score: members.length * 1000 + support });
     }
-    if (!candidates.length) return { mode: "exact", code: normalized, reason: "NO_CONFIDENT_FAMILY" };
+    if (!candidates.length) return { mode: "exact", code: normalized, reason: "NO_CONFIDENT_APPAREL_FAMILY" };
     candidates.sort((a, b) => b.score - a.score || b.base.length - a.base.length);
     const best = candidates[0];
     const second = candidates[1];
     if (second && second.score === best.score && second.base !== best.base) {
-      return { mode: "exact", code: normalized, reason: "AMBIGUOUS_FAMILY", candidates };
+      return { mode: "exact", code: normalized, reason: "AMBIGUOUS_APPAREL_FAMILY", candidates };
     }
-    return { mode: "family", code: normalized, base: best.base, members: best.members, suffix: best.suffix, candidates };
+    return {
+      mode: "family",
+      familyType: "apparel",
+      code: normalized,
+      base: best.base,
+      members: best.members,
+      suffix: best.suffix,
+      candidates,
+      reason: "SAFE_APPAREL_FAMILY",
+    };
+  }
+
+  function resolveShoeFamily(code, vrichIndex, supportSets = []) {
+    const codeInfo = parseShoeSizedCode(code);
+    const normalized = normalizeCode(code);
+    if (!codeInfo) return { mode: "exact", code: normalized, reason: "NO_SHOE_SIZE_SUFFIX" };
+
+    const inputRows = vrichIndex.get(normalized) || [];
+    const reference = bestShoeEvidence(inputRows, codeInfo);
+    if (!reference) {
+      return { mode: "exact", code: normalized, reason: "NO_CONFIDENT_SHOE_EVIDENCE" };
+    }
+    if (reference.classification === "unknown" && !reference.structuredStock) {
+      return { mode: "exact", code: normalized, reason: "UNCONFIRMED_SHOE_PRODUCT" };
+    }
+
+    const members = [];
+    const evidenceByCode = {};
+    let support = 0;
+
+    for (const candidateCode of vrichIndex.keys()) {
+      const candidateInfo = parseShoeSizedCode(candidateCode);
+      if (!candidateInfo || candidateInfo.base !== codeInfo.base) continue;
+      const candidateEvidence = bestShoeEvidence(
+        vrichIndex.get(candidateCode) || [],
+        candidateInfo,
+        reference
+      );
+      if (!candidateEvidence) continue;
+      members.push(candidateCode);
+      evidenceByCode[candidateCode] = {
+        classification: candidateEvidence.classification,
+        structuredStock: candidateEvidence.structuredStock,
+        similarity: candidateEvidence.similarity,
+      };
+      if (supportSets.some((set) => set && set.has(candidateCode))) support += 1;
+    }
+
+    const uniqueMembers = [...new Set(members)].sort((left, right) => {
+      const leftInfo = parseShoeSizedCode(left);
+      const rightInfo = parseShoeSizedCode(right);
+      return Number(leftInfo?.size || 0) - Number(rightInfo?.size || 0) ||
+        left.localeCompare(right, undefined, { numeric: true });
+    });
+
+    if (uniqueMembers.length < 2 || !uniqueMembers.includes(normalized)) {
+      return {
+        mode: "exact",
+        code: normalized,
+        reason: "NO_CONFIDENT_SHOE_FAMILY",
+        base: codeInfo.base,
+        candidates: uniqueMembers,
+      };
+    }
+
+    return {
+      mode: "family",
+      familyType: "shoe",
+      code: normalized,
+      base: codeInfo.base,
+      members: uniqueMembers,
+      suffix: codeInfo.size,
+      support,
+      evidenceByCode,
+      shoeSizeRange: `${SHOE_SIZES[0]}-${SHOE_SIZES[SHOE_SIZES.length - 1]}`,
+      reason: "SAFE_SHOE_FAMILY",
+    };
+  }
+
+  function resolveFamily(code, vrichIndex, supportSets = []) {
+    const normalized = normalizeCode(code);
+    const apparel = resolveApparelFamily(normalized, vrichIndex, supportSets);
+    if (apparel.mode === "family") return apparel;
+
+    const shoe = resolveShoeFamily(normalized, vrichIndex, supportSets);
+    if (shoe.mode === "family") return shoe;
+
+    if (apparel.reason === "AMBIGUOUS_APPAREL_FAMILY") return apparel;
+    if (parseShoeSizedCode(normalized)) return shoe;
+    return apparel;
   }
 
   function expandTargets(targetRows, targetCodeColumn, vrichIndex, supportSets, enabled) {
@@ -304,11 +638,14 @@
 
   global.StockEngine = {
     SIZE_SUFFIXES,
+    SHOE_SIZES,
     normalizeCode,
     toFiniteNumber,
     buildIndex,
     orderedCodes,
     buildComboMap,
+    parseShoeSizedCode,
+    resolveShoeFamily,
     resolveFamily,
     expandTargets,
     buildActiveComponentUsage,
